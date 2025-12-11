@@ -9,5 +9,7 @@ import java.util.Optional;
 public interface MemberMapper {
 
     Optional<Member> findByEmail(String email);
-
+    void insertMember(Member member);
+    boolean existByEmail(String email);
+    
 }

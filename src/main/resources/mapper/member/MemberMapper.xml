@@ -6,4 +6,16 @@
     <select id="findByEmail" resultType="Member">
         SELECT member_id, email, password, nickname, point, created_at, updated_at FROM members WHERE email = #{email}
     </select>
+
+    <select id="existByEmail" resultType="boolean">
+        SELECT EXISTS (SELECT 1
+                       FROM members
+                       WHERE email = #{email}
+        );
+    </select>
+
+    <insert id="insertMember" useGeneratedKeys="true" keyProperty="memberId">
+        INSERT INTO members (email, password, nickname, point, created_at, updated_at)
+        VALUES (#{email}, #{password}, #{nickname}, 0, NOW(), NOW())
+    </insert>
 </mapper>
