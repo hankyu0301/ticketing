@@ -1,19 +1,26 @@
 package com.ticketing.domain.concert.model;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import com.ticketing.global.common.BaseEntity;
 
 @Getter
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Concert extends BaseEntity {
 
     private Long concertId;
     private String title;
     private String description;
 
+    @Builder
+    private Concert(String title, String description) {
+        this.title = title;
+        this.description = description;
+    }
+
+    public static Concert create(String title, String description) {
+        return Concert.builder()
+                .title(title)
+                .description(description)
+                .build();
+    }
 }
