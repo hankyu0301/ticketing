@@ -37,3 +37,9 @@ logging:
   level:
     root: INFO
     com.project.ticketing: DEBUG
+
+queue:
+  estimated-throughput: 50
+  max-active-member: 1000
+  active-time-ms: 300000
+  safety-ttl-days: 3
