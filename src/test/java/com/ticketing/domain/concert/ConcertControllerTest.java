@@ -9,6 +9,7 @@ import com.ticketing.domain.concert.model.Concert;
 import com.ticketing.domain.concert.service.ConcertService;
 import com.ticketing.global.common.exception.concert.ConcertErrorMessage;
 import com.ticketing.global.common.exception.concert.ConcertNotFoundException;
+import com.ticketing.global.interceptor.QueueAccessInterceptor;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +43,9 @@ class ConcertControllerTest {
 
     @MockitoBean
     ConcertService concertService;
+
+    @MockitoBean
+    QueueAccessInterceptor queueAccessInterceptor;
 
     // ==========================================
     // 1. 콘서트 생성 테스트
