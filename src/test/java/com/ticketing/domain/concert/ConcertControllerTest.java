@@ -75,11 +75,31 @@ class ConcertControllerTest {
     @Test
     @DisplayName("[FAIL] 콘서트 생성 실패 - title 누락 (400 Bad Request)")
     @WithMockUser
-    void createConcert_fail_validation() throws Exception {
+    void createConcert_fail_null_title() throws Exception {
 
         // given
         ConcertCreateRequest request = new ConcertCreateRequest();
         ReflectionTestUtils.setField(request, "description", "설명만 있음");
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/v1/concerts")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)));
+
+        // then
+        result.andExpect(status().isBadRequest())
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("[FAIL] 콘서트 생성 실패 - description 누락 (400 Bad Request)")
+    @WithMockUser
+    void createConcert_fail_null_description() throws Exception {
+
+        // given
+        ConcertCreateRequest request = new ConcertCreateRequest();
+        ReflectionTestUtils.setField(request, "title", "제목만 있음");
 
         // when
         ResultActions result = mockMvc.perform(post("/api/v1/concerts")
@@ -144,10 +164,106 @@ class ConcertControllerTest {
                 .andDo(print());
     }
 
+    @Test
+    @DisplayName("[FAIL] 스케줄 생성 실패 - concertDate 누락 (400 Bad Request)")
+    @WithMockUser
+    void createSchedule_fail_null_concertDate() throws Exception {
+
+        // given
+        Long concertId = 1L;
+        ConcertScheduleCreateRequest request = new ConcertScheduleCreateRequest();
+        ReflectionTestUtils.setField(request, "reservationOpenAt", LocalDateTime.now().plusDays(10));
+        ReflectionTestUtils.setField(request, "totalSeats", 50000);
+
+        given(concertService.createSchedule(eq(concertId), any(ConcertScheduleCreateRequest.class))).willReturn(10L);
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/v1/concerts/{concertId}/schedules", concertId)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)));
+
+        // then
+        result.andExpect(status().isBadRequest())
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("[FAIL] 스케줄 생성 실패 - reservationOpenAt 누락 (400 Bad Request)")
+    @WithMockUser
+    void createSchedule_fail_null_reservationOpenAt() throws Exception {
+
+        // given
+        Long concertId = 1L;
+        ConcertScheduleCreateRequest request = new ConcertScheduleCreateRequest();
+        ReflectionTestUtils.setField(request, "concertDate", LocalDateTime.now().plusDays(10));
+        ReflectionTestUtils.setField(request, "totalSeats", 50000);
+
+        given(concertService.createSchedule(eq(concertId), any(ConcertScheduleCreateRequest.class))).willReturn(10L);
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/v1/concerts/{concertId}/schedules", concertId)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)));
+
+        // then
+        result.andExpect(status().isBadRequest())
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("[FAIL] 스케줄 생성 실패 - totalSeats 누락 (400 Bad Request)")
+    @WithMockUser
+    void createSchedule_fail_null_totalSeats() throws Exception {
+
+        // given
+        Long concertId = 1L;
+        ConcertScheduleCreateRequest request = new ConcertScheduleCreateRequest();
+        ReflectionTestUtils.setField(request, "concertDate", LocalDateTime.now().plusDays(10));
+        ReflectionTestUtils.setField(request, "reservationOpenAt", LocalDateTime.now().plusDays(10));
+
+        given(concertService.createSchedule(eq(concertId), any(ConcertScheduleCreateRequest.class))).willReturn(10L);
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/v1/concerts/{concertId}/schedules", concertId)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)));
+
+        // then
+        result.andExpect(status().isBadRequest())
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("[FAIL] 스케줄 생성 실패 - totalSeats 음수 (400 Bad Request)")
+    @WithMockUser
+    void createSchedule_fail_negative_totalSeats() throws Exception {
+
+        // given
+        Long concertId = 1L;
+        ConcertScheduleCreateRequest request = new ConcertScheduleCreateRequest();
+        ReflectionTestUtils.setField(request, "concertDate", LocalDateTime.now().plusDays(10));
+        ReflectionTestUtils.setField(request, "reservationOpenAt", LocalDateTime.now().plusDays(10));
+        ReflectionTestUtils.setField(request, "totalSeats", -1);
+
+        given(concertService.createSchedule(eq(concertId), any(ConcertScheduleCreateRequest.class))).willReturn(10L);
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/v1/concerts/{concertId}/schedules", concertId)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)));
+
+        // then
+        result.andExpect(status().isBadRequest())
+                .andDo(print());
+    }
+
     // ==========================================
     // 3. 콘서트 조회 테스트
     // ==========================================
-
     @Test
     @DisplayName("[SUCCESS] 콘서트 상세 조회 성공 - 200 OK")
     @WithMockUser
