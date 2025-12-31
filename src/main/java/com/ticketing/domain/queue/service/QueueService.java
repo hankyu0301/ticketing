@@ -29,7 +29,7 @@ public class QueueService {
      * 대기열 진입
      */
     public QueueResponse enterQueue(Long scheduleId, Long memberId) {
-        // 1. [추가] 스케줄 관리 등록 (가장 먼저 수행)
+        // 1. 스케줄 관리 등록 (가장 먼저 수행)
         queueRedisRepository.addProcessingSchedule(scheduleId);
 
         // 2. 대기열 진입 시도
