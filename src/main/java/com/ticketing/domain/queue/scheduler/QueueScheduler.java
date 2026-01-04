@@ -3,6 +3,7 @@ package com.ticketing.domain.queue.scheduler;
 import com.ticketing.domain.queue.repository.QueueRedisRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -27,7 +28,12 @@ public class QueueScheduler {
     @Value("${queue.active-time-ms:300000}")
     private long activeTimeMs;
 
-    @Scheduled(fixedDelay = 1000)
+    @Scheduled(fixedDelayString = "${scheduler.fixed-delay:1000}")
+    @SchedulerLock(
+            name = "QueueScheduler_processQueue", // 락 이름
+            lockAtLeastFor = "990ms", // 작업이 빨리 끝나도 0.99초간은 락을 쥐고 있음 (중복 실행 방지)
+            lockAtMostFor = "2000ms"  // 2초가 지나면 락을 강제 해제 (서버 다운 대비)
+    )
     public void processQueue() {
         Set<Long> scheduleIds = queueRedisRepository.getProcessingSchedules();
         if (scheduleIds == null || scheduleIds.isEmpty()) {
