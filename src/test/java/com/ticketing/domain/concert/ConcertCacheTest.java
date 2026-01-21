@@ -1,6 +1,7 @@
 package com.ticketing.domain.concert;
 
 import com.ticketing.domain.concert.dto.ConcertDto;
+import com.ticketing.domain.concert.dto.ConcertScheduleCreateRequest;
 import com.ticketing.domain.concert.dto.ConcertScheduleDto;
 import com.ticketing.domain.concert.mapper.ConcertMapper;
 import com.ticketing.domain.concert.mapper.ConcertScheduleMapper;
@@ -99,5 +100,39 @@ class ConcertCacheTest {
         List<ConcertScheduleDto> secondResult = concertService.getSchedules(concertId);
         assertThat(secondResult).hasSize(1);
         verify(concertScheduleMapper, times(1)).findAllByConcertId(concertId);
+    }
+
+    @Test
+    @DisplayName("스케줄 생성 시 캐시 무효화: 생성 후 다시 조회하면 DB를 호출해야 한다")
+    void createSchedule_cache_evict() {
+        // given
+        Long concertId = 1L;
+
+        // 스케줄 생성 요청 객체 세팅
+        ConcertScheduleCreateRequest request = new ConcertScheduleCreateRequest();
+        ReflectionTestUtils.setField(request, "concertDate", LocalDateTime.now().plusDays(1));
+        ReflectionTestUtils.setField(request, "reservationOpenAt", LocalDateTime.now());
+        ReflectionTestUtils.setField(request, "totalSeats", 100);
+
+        given(concertMapper.existsById(concertId)).willReturn(true);
+        given(concertScheduleMapper.findAllByConcertId(concertId))
+                .willReturn(List.of());
+
+        // 1. 첫 번째 조회 -> DB 호출 발생 (Cache Miss)
+        concertService.getSchedules(concertId);
+        verify(concertScheduleMapper, times(1)).findAllByConcertId(concertId);
+
+        // 2. 두 번째 조회 -> DB 호출 안 함 (Cache Hit)
+        concertService.getSchedules(concertId);
+        verify(concertScheduleMapper, times(1)).findAllByConcertId(concertId);
+
+        // 3. 스케줄 생성 -> @CacheEvict 동작하여 schedules 키 삭제됨 (Cache Evict)
+        concertService.createSchedule(concertId, request);
+
+        // 4. 세 번째 조회 -> 캐시가 비었으므로 DB 다시 호출 (Cache Miss)
+        concertService.getSchedules(concertId);
+
+        // then: 총 호출 횟수가 2번이어야 함
+        verify(concertScheduleMapper, times(2)).findAllByConcertId(concertId);
     }
 }

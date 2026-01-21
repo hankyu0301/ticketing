@@ -11,6 +11,7 @@ import com.ticketing.domain.concert.model.ConcertSchedule;
 import com.ticketing.global.common.exception.concert.ConcertErrorMessage;
 import com.ticketing.global.common.exception.concert.ConcertNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +36,7 @@ public class ConcertService {
 
     // 스케줄 생성
     @Transactional
+    @CacheEvict(value = "schedules", key = "#concertId")
     public Long createSchedule(Long concertId, ConcertScheduleCreateRequest request) {
         // 콘서트 존재 여부 확인
         if (!concertMapper.existsById(concertId)) {
