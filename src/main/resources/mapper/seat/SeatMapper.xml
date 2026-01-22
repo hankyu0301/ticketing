@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.ticketing.domain.seat.mapper.SeatMapper">
+
+    <insert id="insertSeatsInBatch" parameterType="java.util.List">
+        INSERT INTO seats (schedule_id, seat_no, grade, price, status, created_at, updated_at)
+        VALUES
+        <foreach collection="list" item="seat" separator=",">
+            (#{seat.scheduleId}, #{seat.seatNo}, #{seat.grade}, #{seat.price}, #{seat.status}, NOW(), NOW())
+        </foreach>
+    </insert>
+
+    <select id="findAllByScheduleId" resultType="Seat">
+        SELECT seat_id, schedule_id, seat_no, grade, price, status, version
+        FROM seats
+        WHERE schedule_id = #{scheduleId}
+        ORDER BY seat_no ASC
+    </select>
+
+    <select id="findByIdWithPessimisticLock" resultType="Seat">
+        SELECT seat_id, schedule_id, seat_no, grade, price, status, version
+        FROM seats
+        WHERE seat_id = #{seatId}
+            FOR UPDATE
+    </select>
+
+    <update id="update">
+        UPDATE seats
+        SET status = #{status},
+            member_id = #{memberId},
+            updated_at = NOW()
+        WHERE seat_id = #{seatId}
+    </update>
+
+</mapper>
