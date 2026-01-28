@@ -6,14 +6,12 @@ import com.ticketing.domain.reservation.service.ReservationService;
 import com.ticketing.global.common.response.ResponseDTO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/reservations")
+@RequestMapping("/api/v1/reservations")
 @RequiredArgsConstructor
 public class ReservationController {
 
@@ -21,6 +19,6 @@ public class ReservationController {
 
     @PostMapping
     public ResponseEntity<ResponseDTO<ReservationResponse>> createReservation(@RequestBody @Valid ReservationCreateRequest request) {
-        return ResponseEntity.ok(ResponseDTO.getSuccessResult(reservationService.reserve(request)));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ResponseDTO.getSuccessResult(reservationService.reserve(request)));
     }
 }

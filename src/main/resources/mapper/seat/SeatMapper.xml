@@ -13,14 +13,14 @@
     </insert>
 
     <select id="findAllByScheduleId" resultType="Seat">
-        SELECT seat_id, schedule_id, seat_no, grade, price, memberId, status, updated_at, created_at
+        SELECT seat_id, schedule_id, seat_no, grade, price, member_Id, status, updated_at, created_at
         FROM seats
         WHERE schedule_id = #{scheduleId}
         ORDER BY seat_no ASC
     </select>
 
     <select id="findByIdWithPessimisticLock" resultType="Seat" timeout="5000">
-        SELECT seat_id, schedule_id, seat_no, grade, price, memberId, status, updated_at, created_at
+        SELECT seat_id, schedule_id, seat_no, grade, price, member_Id, status, updated_at, created_at
         FROM seats
         WHERE seat_id = #{seatId}
             FOR UPDATE
@@ -35,7 +35,7 @@
     </update>
 
     <select id="findById" resultType="com.ticketing.domain.seat.model.Seat">
-        SELECT seat_id, schedule_id, seat_no, grade, price, memberId, status, updated_at, created_at
+        SELECT seat_id, schedule_id, seat_no, grade, price, member_Id, status, updated_at, created_at
         FROM seats
         WHERE seat_id = #{seatId}
     </select>
