@@ -4,17 +4,19 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import static com.ticketing.global.common.exception.reservation.ReservationErrorMessage.*;
+
 @Getter
 @NoArgsConstructor
 public class ReservationCreateRequest {
 
-    @NotNull
+    @NotNull(message = MEMBER_ID_MUST_NOT_EMPTY)
     private Long memberId;
 
-    @NotNull
+    @NotNull(message = SCHEDULE_ID_NOT_EMPTY)
     private Long scheduleId;
 
-    @NotNull
+    @NotNull(message = SEAT_ID_MUST_NOT_EMPTY)
     private Long seatId;
 
 }
