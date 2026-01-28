@@ -12,10 +12,6 @@ local limit = tonumber(ARGV[2])
 local expireAt = ARGV[3]
 local ttl = tonumber(ARGV[4])
 
-local seqKey = "queue:score:" .. string.match(waitKey, "queue:wait:(.*)")
-local score = redis.call('INCR', seqKey)
-redis.call('EXPIRE', seqKey, ttl)
-
 -- 1. 현재 활성 인원 체크
 local activeCount = redis.call('ZCARD', activeKey)
 
@@ -30,6 +26,10 @@ if activeCount < limit and waitCount == 0 then
     redis.call('EXPIRE', activeKey, ttl)
     return -100 -- 입장 성공 코드
 end
+
+local seqKey = "queue:score:" .. string.match(waitKey, "queue:wait:(.*)")
+local score = redis.call('INCR', seqKey)
+redis.call('EXPIRE', seqKey, ttl)
 
 -- [일반 대기 진입]
 -- 자리가 없거나 이미 줄 선 사람이 있으면 대기열로
