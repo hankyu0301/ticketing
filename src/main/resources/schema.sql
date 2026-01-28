@@ -61,7 +61,6 @@ CREATE TABLE seats (
     -- 동시성 제어 및 예약 상태 관리
                        member_id   BIGINT COMMENT '예약자 ID (FK, NULL 허용)',
                        status      VARCHAR(20) DEFAULT 'AVAILABLE' COMMENT '상태 (AVAILABLE, TEMPORARY, SOLD_OUT)',
-                       version     BIGINT DEFAULT 0 COMMENT '낙관적 락(Optimistic Lock) 버전 관리용',
 
                        created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
                        updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
