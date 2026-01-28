@@ -23,8 +23,6 @@ public class QueueRedisRepository {
     private final RedisScript<Long> queueStatusScript;
     private final RedisScript<List> activeMemberScript;
 
-    private static final String WAIT_KEY_PREFIX = "queue:wait:";
-    private static final String ACTIVE_KEY_PREFIX = "queue:active:";
     private static final String PROCESSING_SCHEDULES_KEY = "queue:processing_schedules";
 
     @Value("${queue.safety-ttl-days:7}")
@@ -99,6 +97,7 @@ public class QueueRedisRepository {
     public List<String> moveUsersToActive(Long scheduleId, long maxActive, long batchSize, long activeTimeMs) {
         String waitKey = getWaitKey(scheduleId);
         String activeKey = getActiveKey(scheduleId);
+        String scoreKey = getScoreKey(scheduleId);
 
         long now = System.currentTimeMillis();
         long expireAt = now + activeTimeMs;
@@ -106,7 +105,7 @@ public class QueueRedisRepository {
         // execute 결과는 List<String> 등으로 캐스팅됨
         return redisTemplate.execute(
                 activeMemberScript,
-                List.of(waitKey, activeKey), // KEYS
+                List.of(waitKey, activeKey, scoreKey), // KEYS
                 String.valueOf(maxActive),   // ARGV[1]
                 String.valueOf(batchSize),   // ARGV[2]
                 String.valueOf(expireAt),    // ARGV[3]
@@ -165,16 +164,21 @@ public class QueueRedisRepository {
      */
     public void removeProcessingSchedule(Long scheduleId) {
         redisTemplate.opsForSet().remove(PROCESSING_SCHEDULES_KEY, scheduleId.toString());
+        localCache.remove(scheduleId);
     }
 
     // ====================================================
     // Helper Methods
     // ====================================================
     private String getWaitKey(Long scheduleId) {
-        return WAIT_KEY_PREFIX + scheduleId;
+        return "queue:{" + scheduleId + "}:wait";
     }
 
     private String getActiveKey(Long scheduleId) {
-        return ACTIVE_KEY_PREFIX + scheduleId;
+        return "queue:{" + scheduleId + "}:active";
+    }
+
+    private String getScoreKey(Long scheduleId) {
+        return "queue:{" + scheduleId + "}:score";
     }
 }

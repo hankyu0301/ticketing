@@ -1,12 +1,15 @@
--- KEYS[1]: 대기열 Key (queue:wait:{scheduleId})
--- KEYS[2]: 활성열 Key (queue:active:{scheduleId})
+-- KEYS[1]: 대기열 Key (queue:{id}:wait)
+-- KEYS[2]: 활성열 Key (queue:{id}:active)
+-- KEYS[3]: queue:{id}:score
 -- ARGV[1]: 사용자 ID (memberId)
--- ARGV[2]: 현재 시간 (score/timestamp)
--- ARGV[3]: 최대 허용 인원 (limit)
--- ARGV[4]: 활성 만료 시간 (expireAt)
+-- ARGV[2]: 최대 허용 인원 (limit / maxActive)
+-- ARGV[3]: 활성 만료 시간 (expireAt)
+-- ARGV[4]: TTL (Key 만료 시간)
 
 local waitKey = KEYS[1]
 local activeKey = KEYS[2]
+local seqKey = KEYS[3]
+
 local memberId = ARGV[1]
 local limit = tonumber(ARGV[2])
 local expireAt = ARGV[3]
@@ -27,7 +30,6 @@ if activeCount < limit and waitCount == 0 then
     return -100 -- 입장 성공 코드
 end
 
-local seqKey = "queue:score:" .. string.match(waitKey, "queue:wait:(.*)")
 local score = redis.call('INCR', seqKey)
 redis.call('EXPIRE', seqKey, ttl)
 
