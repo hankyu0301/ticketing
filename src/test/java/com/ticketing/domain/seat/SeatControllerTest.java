@@ -57,6 +57,8 @@ class SeatControllerTest {
         ReflectionTestUtils.setField(request, "grade", "VIP");
         ReflectionTestUtils.setField(request, "price", BigDecimal.valueOf(150000));
 
+        given(queueAccessInterceptor.preHandle(any(), any(), any())).willReturn(true);
+
         // when
         ResultActions result = mockMvc.perform(post("/api/v1/schedules/{scheduleId}/seats", scheduleId)
                 .with(csrf())
@@ -109,6 +111,8 @@ class SeatControllerTest {
         ReflectionTestUtils.setField(request, "totalSeats", -5);
         ReflectionTestUtils.setField(request, "grade", "");
         ReflectionTestUtils.setField(request, "price", BigDecimal.valueOf(-1000));
+
+        given(queueAccessInterceptor.preHandle(any(), any(), any())).willReturn(true);
 
         // when
         ResultActions result = mockMvc.perform(post("/api/v1/schedules/{scheduleId}/seats", scheduleId)
