@@ -1,12 +1,11 @@
 package com.ticketing.domain.member.dto;
 
 import com.ticketing.domain.member.model.Member;
-import lombok.Generated;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
+import lombok.NoArgsConstructor;
 
 @Getter
-@RequiredArgsConstructor
+@NoArgsConstructor
 public class MemberSignupResponse {
 
     private String email;
