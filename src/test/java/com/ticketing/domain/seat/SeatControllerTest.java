@@ -6,7 +6,6 @@ import com.ticketing.domain.seat.dto.SeatCreateRequest;
 import com.ticketing.domain.seat.dto.SeatResponse;
 import com.ticketing.domain.seat.model.Seat;
 import com.ticketing.domain.seat.service.SeatService;
-import com.ticketing.global.interceptor.QueueAccessInterceptor;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,7 +20,6 @@ import org.springframework.test.web.servlet.ResultActions;
 import java.math.BigDecimal;
 import java.util.List;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -43,8 +41,6 @@ class SeatControllerTest {
     @MockitoBean
     SeatService seatService;
 
-    @MockitoBean
-    QueueAccessInterceptor queueAccessInterceptor;
 
     @Test
     @DisplayName("[SUCCESS] 좌석 생성 API 성공")
@@ -56,8 +52,6 @@ class SeatControllerTest {
         ReflectionTestUtils.setField(request, "totalSeats", 50);
         ReflectionTestUtils.setField(request, "grade", "VIP");
         ReflectionTestUtils.setField(request, "price", BigDecimal.valueOf(150000));
-
-        given(queueAccessInterceptor.preHandle(any(), any(), any())).willReturn(true);
 
         // when
         ResultActions result = mockMvc.perform(post("/api/v1/schedules/{scheduleId}/seats", scheduleId)
@@ -84,7 +78,6 @@ class SeatControllerTest {
         List<SeatResponse> response = List.of(new SeatResponse(seat1), new SeatResponse(seat2));
 
         given(seatService.getSeats(anyLong())).willReturn(response);
-        given(queueAccessInterceptor.preHandle(any(), any(), any())).willReturn(true);
 
         // when
         ResultActions result = mockMvc.perform(get("/api/v1/schedules/{scheduleId}/seats", scheduleId)
@@ -111,8 +104,6 @@ class SeatControllerTest {
         ReflectionTestUtils.setField(request, "totalSeats", -5);
         ReflectionTestUtils.setField(request, "grade", "");
         ReflectionTestUtils.setField(request, "price", BigDecimal.valueOf(-1000));
-
-        given(queueAccessInterceptor.preHandle(any(), any(), any())).willReturn(true);
 
         // when
         ResultActions result = mockMvc.perform(post("/api/v1/schedules/{scheduleId}/seats", scheduleId)

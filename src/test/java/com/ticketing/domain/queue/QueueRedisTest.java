@@ -105,10 +105,10 @@ class QueueRedisTest {
     }
 
     private boolean isMemberInActive(Long memberId) {
-        return redisTemplate.opsForZSet().score("queue:active:" + SCHEDULE_ID, memberId.toString()) != null;
+        return redisTemplate.opsForZSet().score("queue:{" + SCHEDULE_ID + "}:active", memberId.toString()) != null;
     }
 
     private boolean isMemberInWait(Long memberId) {
-        return redisTemplate.opsForZSet().score("queue:wait:" + SCHEDULE_ID, memberId.toString()) != null;
+        return redisTemplate.opsForZSet().score("queue:{" + SCHEDULE_ID + "}:wait", memberId.toString()) != null;
     }
 }

@@ -5,5 +5,5 @@ import com.ticketing.domain.reservation.dto.ReservationResponse;
 
 public interface ReservationFacade {
 
-    ReservationResponse reserve(ReservationCreateRequest req);
+    ReservationResponse reserve(Long memberId,ReservationCreateRequest req);
 }

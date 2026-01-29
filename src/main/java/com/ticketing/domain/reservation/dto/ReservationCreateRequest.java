@@ -10,9 +10,6 @@ import static com.ticketing.global.common.exception.reservation.ReservationError
 @NoArgsConstructor
 public class ReservationCreateRequest {
 
-    @NotNull(message = MEMBER_ID_MUST_NOT_EMPTY)
-    private Long memberId;
-
     @NotNull(message = SCHEDULE_ID_NOT_EMPTY)
     private Long scheduleId;
 

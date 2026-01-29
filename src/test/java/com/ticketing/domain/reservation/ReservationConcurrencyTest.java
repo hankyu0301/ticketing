@@ -69,8 +69,8 @@ class ReservationConcurrencyTest extends IntegrationTestSupport {
             executorService.submit(() -> {
                 try {
                     Long validMemberId = memberIds.get(index);
-                    ReservationCreateRequest request = createReservationRequest(validMemberId);
-                    reservationFacade.reserve(request);
+                    ReservationCreateRequest request = createReservationRequest();
+                    reservationFacade.reserve(validMemberId, request);
                     successCount.incrementAndGet();
                 } catch (Exception e) {
                     failCount.incrementAndGet();
@@ -99,9 +99,8 @@ class ReservationConcurrencyTest extends IntegrationTestSupport {
                 .isNotEqualTo(Seat.SeatStatus.AVAILABLE);
     }
 
-    private ReservationCreateRequest createReservationRequest(Long memberId) {
+    private ReservationCreateRequest createReservationRequest() {
         ReservationCreateRequest request = new ReservationCreateRequest();
-        ReflectionTestUtils.setField(request, "memberId", memberId);
         ReflectionTestUtils.setField(request, "scheduleId", scheduleId);
         ReflectionTestUtils.setField(request, "seatId", seatId);
         return request;

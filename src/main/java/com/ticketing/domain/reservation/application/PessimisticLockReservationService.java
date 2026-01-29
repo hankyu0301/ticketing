@@ -22,10 +22,10 @@ public class PessimisticLockReservationService implements ReservationFacade {
 
     @Override
     @Transactional
-    public ReservationResponse reserve(ReservationCreateRequest req) {
+    public ReservationResponse reserve(Long memberId, ReservationCreateRequest req) {
         Seat seat = seatMapper.findByIdWithPessimisticLock(req.getSeatId())
                 .orElseThrow(() -> new SeatNotFoundException(NOT_EXIST_SEAT));
-        Reservation reservation = reservationService.reserve(seat, req.getMemberId(), req.getSeatId());
+        Reservation reservation = reservationService.reserve(seat, memberId, req.getSeatId());
         return new ReservationResponse(reservation);
     }
 }

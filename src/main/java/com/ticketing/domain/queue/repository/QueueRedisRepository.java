@@ -36,13 +36,14 @@ public class QueueRedisRepository {
     public Long register(Long scheduleId, Long memberId, long maxActive, long activeTimeMs) {
         String waitKey = getWaitKey(scheduleId);
         String activeKey = getActiveKey(scheduleId);
+        String scoreKey = getScoreKey(scheduleId);
         long now = System.currentTimeMillis();
         long expireAt = now + activeTimeMs;
         long ttlSeconds = safetyTtlDays * 24 * 60 * 60;
 
         return redisTemplate.execute(
                 queueEnterScript,
-                List.of(waitKey, activeKey),    // KEYS[1], KEYS[2]
+                List.of(waitKey, activeKey, scoreKey),    // KEYS[1], KEYS[2], KEYS[3]
                 memberId.toString(),            // ARGV[1]
                 String.valueOf(maxActive),      // ARGV[2] (최대 인원)
                 String.valueOf(expireAt),       // ARGV[3] (만료 시간)

@@ -3,11 +3,9 @@ package com.ticketing.domain.queue;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketing.domain.queue.controller.QueueController;
 import com.ticketing.domain.queue.dto.QueueResponse;
-import com.ticketing.domain.queue.repository.QueueRedisRepository;
 import com.ticketing.domain.queue.service.QueueService;
 import com.ticketing.global.common.exception.queue.QueueErrorMessage;
 import com.ticketing.global.common.exception.queue.QueueNotFoundException;
-import com.ticketing.global.interceptor.QueueAccessInterceptor;
 import com.ticketing.global.security.service.CustomUserDetails;
 import com.ticketing.global.security.service.SessionMember;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,9 +42,6 @@ class QueueControllerTest {
 
     @MockitoBean
     QueueService queueService;
-
-    @MockitoBean
-    QueueAccessInterceptor queueAccessInterceptor;
 
     // 인증 객체 Mocking
     @BeforeEach
