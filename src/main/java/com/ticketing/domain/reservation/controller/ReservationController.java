@@ -13,6 +13,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/v1/reservations")
 @RequiredArgsConstructor
@@ -25,5 +27,11 @@ public class ReservationController {
     public ResponseEntity<ResponseDTO<ReservationResponse>> createReservation(@AuthenticationPrincipal CustomUserDetails member, @RequestBody @Valid ReservationCreateRequest request) {
         Long memberId = member.getSessionMember().getMemberId();
         return ResponseEntity.status(HttpStatus.CREATED).body(ResponseDTO.getSuccessResult(reservationService.reserve(memberId, request)));
+    }
+
+    @GetMapping
+    public ResponseEntity<ResponseDTO<List<ReservationResponse>>> getReservations(@AuthenticationPrincipal CustomUserDetails member) {
+        Long memberId = member.getSessionMember().getMemberId();
+        return ResponseEntity.status(HttpStatus.CREATED).body(ResponseDTO.getSuccessResult(reservationService.getReservations(memberId)));
     }
 }
