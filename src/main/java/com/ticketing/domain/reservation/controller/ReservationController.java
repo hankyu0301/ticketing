@@ -32,6 +32,6 @@ public class ReservationController {
     @GetMapping
     public ResponseEntity<ResponseDTO<List<ReservationResponse>>> getReservations(@AuthenticationPrincipal CustomUserDetails member) {
         Long memberId = member.getSessionMember().getMemberId();
-        return ResponseEntity.status(HttpStatus.CREATED).body(ResponseDTO.getSuccessResult(reservationService.getReservations(memberId)));
+        return ResponseEntity.status(HttpStatus.OK).body(ResponseDTO.getSuccessResult(reservationService.getReservations(memberId)));
     }
 }
