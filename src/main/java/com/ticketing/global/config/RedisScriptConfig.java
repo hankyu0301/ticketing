@@ -24,4 +24,9 @@ public class RedisScriptConfig {
     public RedisScript<List> activeMemberScript() {
         return RedisScript.of(new ClassPathResource("scripts/active_member.lua"), List.class);
     }
+
+    @Bean
+    public RedisScript<Long> validExtensionScript() {
+        return RedisScript.of(new ClassPathResource("scripts/queue_valid_extension.lua"), Long.class);
+    }
 }

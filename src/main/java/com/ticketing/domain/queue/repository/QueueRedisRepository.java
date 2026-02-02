@@ -22,6 +22,7 @@ public class QueueRedisRepository {
     private final RedisScript<Long> queueEnterScript;
     private final RedisScript<Long> queueStatusScript;
     private final RedisScript<List> activeMemberScript;
+    private final RedisScript<Long> validExtensionScript;
 
     private static final String PROCESSING_SCHEDULES_KEY = "queue:processing_schedules";
 
@@ -68,24 +69,26 @@ public class QueueRedisRepository {
     }
 
     /**
-     * 활성 유저 검증 및 시간 연장
-     * @return true(유효함), false(만료됨/없음)
+     * 활성 유저 검증 및 시간 연장 (Lua Script 적용)
+     * 1. 유저가 존재하고, 만료 시간이 지나지 않았을 때만 연장함.
+     * 2. 만료된 유저가 접근하면 즉시 삭제하고 false 반환.
      */
     public boolean validateAndExtendActiveMember(Long scheduleId, Long memberId) {
         String activeKey = getActiveKey(scheduleId);
+        long currentTime = System.currentTimeMillis();
+        long newExpireAt = currentTime + (5 * 60 * 1000);
 
-        // 1. 점수(만료시간) 조회 -> 존재 여부 확인 (O(1))
-        Double score = redisTemplate.opsForZSet().score(activeKey, memberId.toString());
+        // execute(스크립트, 키 리스트, ARGV...)
+        Long result = redisTemplate.execute(
+                validExtensionScript,
+                List.of(activeKey),             // KEYS[1]
+                memberId.toString(),            // ARGV[1]
+                String.valueOf(currentTime),    // ARGV[2]
+                String.valueOf(newExpireAt)     // ARGV[3]
+        );
 
-        if (score == null) {
-            return false; // 활성열에 없음
-        }
-
-        // 2. 존재한다면 시간 연장 (O(logN))
-        long newExpireAt = System.currentTimeMillis() + (5 * 60 * 1000); // 5분 연장
-        redisTemplate.opsForZSet().add(activeKey, memberId.toString(), newExpireAt);
-
-        return true;
+        // Lua 스크립트는 숫자를 리턴하므로 1이면 true, 0이면 false
+        return result != null && result == 1L;
     }
 
     /**
