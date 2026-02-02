@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketing.domain.reservation.controller.ReservationController;
 import com.ticketing.domain.reservation.dto.ReservationCreateRequest;
 import com.ticketing.domain.reservation.dto.ReservationResponse;
+import com.ticketing.domain.reservation.model.Reservation;
 import com.ticketing.domain.reservation.service.ReservationService;
 import com.ticketing.global.security.service.CustomUserDetails;
 import com.ticketing.global.security.service.SessionMember;
@@ -20,7 +21,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
+import java.time.LocalDateTime;
 import java.util.Collections;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -28,6 +31,7 @@ import static org.mockito.BDDMockito.given;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -117,5 +121,54 @@ public class ReservationControllerTest {
         resultActions
                 .andExpect(status().isBadRequest())
                 .andDo(print());
+    }
+
+    @Test
+    @DisplayName("내 예약 목록 조회 성공")
+    void getReservations() throws Exception {
+        // given
+        Long memberId = 1L;
+        CustomUserDetails mockPrincipal = org.mockito.Mockito.mock(CustomUserDetails.class);
+        SessionMember mockSessionMember = org.mockito.Mockito.mock(SessionMember.class);
+
+        given(mockPrincipal.getSessionMember()).willReturn(mockSessionMember);
+        given(mockSessionMember.getMemberId()).willReturn(memberId);
+        given(mockPrincipal.getAuthorities()).willReturn(Collections.emptyList());
+
+        Authentication auth = new UsernamePasswordAuthenticationToken(mockPrincipal, null, mockPrincipal.getAuthorities());
+
+        Reservation reservation1 = Reservation.builder()
+                .memberId(memberId)
+                .seatId(50L)
+                .scheduleId(1L)
+                .reservedAt(LocalDateTime.now())
+                .expiredAt(LocalDateTime.now().plusMinutes(5))
+                .build();
+
+        Reservation reservation2 = Reservation.builder()
+                .memberId(memberId)
+                .seatId(51L)
+                .scheduleId(1L)
+                .reservedAt(LocalDateTime.now())
+                .expiredAt(LocalDateTime.now().plusMinutes(5))
+                .build();
+
+        ReflectionTestUtils.setField(reservation1, "reservationId", 100L);
+        ReflectionTestUtils.setField(reservation2, "reservationId", 101L);
+
+        List<ReservationResponse> responses = List.of(
+                new ReservationResponse(reservation1),
+                new ReservationResponse(reservation2)
+        );
+
+        given(reservationService.getReservations(memberId))
+                .willReturn(responses);
+
+        // when & then
+        mockMvc.perform(get("/api/v1/reservations")
+                        .with(authentication(auth))
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andDo(print())
+                .andExpect(status().isOk());
     }
 }
