@@ -20,7 +20,7 @@ public class ReservationService {
     private final ReservationMapper reservationMapper;
 
     @Autowired
-    public ReservationService(@Qualifier("pessimisticLockReservationService") ReservationFacade reservationFacade, ReservationMapper reservationMapper) {
+    public ReservationService(@Qualifier("pessimisticLockFacade") ReservationFacade reservationFacade, ReservationMapper reservationMapper) {
         this.reservationFacade = reservationFacade;
         this.reservationMapper = reservationMapper;
     }

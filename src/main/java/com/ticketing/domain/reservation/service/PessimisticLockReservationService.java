@@ -4,6 +4,7 @@ import com.ticketing.domain.reservation.model.Reservation;
 import com.ticketing.domain.reservation.mapper.ReservationMapper;
 import com.ticketing.domain.seat.mapper.SeatMapper;
 import com.ticketing.domain.seat.model.Seat;
+import com.ticketing.global.common.exception.seat.SeatNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,23 +12,28 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+import static com.ticketing.global.common.exception.seat.SeatErrorMessage.NOT_EXIST_SEAT;
+
 @Service
 @RequiredArgsConstructor
-public class DefaultReservationService {
+public class PessimisticLockReservationService {
 
     private final ReservationMapper reservationMapper;
     private final SeatMapper seatMapper;
 
     /**
-     * 기본적인 예약 생성 로직
-     * 1. 예약 가능 여부 체크
-     * 2. 좌석 상태 변경 (AVAILABLE -> RESERVED)
-     * 3. 예약 정보 저장
+     * 비관적 락 예약 생성 로직
+     * 1. 좌석 조회 (비관적락)
+     * 2. 예약 가능 여부 체크
+     * 3. 좌석 상태 변경 (AVAILABLE -> RESERVED)
+     * 4. 예약 정보 저장
      */
     @Transactional
-    public Reservation reserve(Seat seat, Long memberId, Long scheduleId) {
+    public Reservation reserve(Long seatId, Long memberId, Long scheduleId) {
 
         // 1, 2
+        Seat seat = seatMapper.findByIdWithPessimisticLock(seatId)
+                .orElseThrow(() -> new SeatNotFoundException(NOT_EXIST_SEAT));
         seat.reserve(memberId);
         seatMapper.update(seat);
 
