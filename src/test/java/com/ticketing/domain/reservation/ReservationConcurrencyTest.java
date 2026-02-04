@@ -53,7 +53,7 @@ class ReservationConcurrencyTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("비관적 락: 100명 동시 요청 시 1명만 성공해야 한다.")
+    @DisplayName("100명 동시 요청 시 1명만 성공해야 한다.")
     void pessimistic_lock_success() throws InterruptedException {
         // given
         int threadCount = 100;
