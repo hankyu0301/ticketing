@@ -54,3 +54,6 @@ queue:
   active-time-ms: 300000
   safety-ttl-days: 3
 
+ticketing:
+  lock:
+    strategy: NAMED

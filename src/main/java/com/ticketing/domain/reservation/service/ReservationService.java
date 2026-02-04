@@ -6,7 +6,6 @@ import com.ticketing.domain.reservation.dto.ReservationResponse;
 import com.ticketing.domain.reservation.mapper.ReservationMapper;
 import com.ticketing.domain.reservation.model.Reservation;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,7 +19,7 @@ public class ReservationService {
     private final ReservationMapper reservationMapper;
 
     @Autowired
-    public ReservationService(@Qualifier("pessimisticLockFacade") ReservationFacade reservationFacade, ReservationMapper reservationMapper) {
+    public ReservationService(ReservationFacade reservationFacade, ReservationMapper reservationMapper) {
         this.reservationFacade = reservationFacade;
         this.reservationMapper = reservationMapper;
     }
