@@ -51,4 +51,4 @@ queue:
 
 ticketing:
   lock:
-    strategy: NAMED
+    strategy: LETTUCE
