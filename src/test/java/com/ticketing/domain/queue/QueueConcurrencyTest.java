@@ -101,6 +101,6 @@ class QueueConcurrencyTest {
         assertThat(Collections.max(ranks)).isEqualTo(90L);
     }
 
-    private String getActiveKey() { return "queue:active:" + SCHEDULE_ID; }
-    private String getWaitKey() { return "queue:wait:" + SCHEDULE_ID; }
+    private String getActiveKey() { return "queue:{"+SCHEDULE_ID+"}:active"; }
+    private String getWaitKey() { return "queue:{"+SCHEDULE_ID+"}:wait"; }
 }

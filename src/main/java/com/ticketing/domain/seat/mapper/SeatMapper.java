@@ -13,6 +13,8 @@ public interface SeatMapper {
 
     List<Seat> findAllByScheduleId(Long scheduleId);
 
+    Optional<Seat> findById(Long seatId);
+
     // (비관적 락) 예약 시 사용 (SELECT ... FOR UPDATE)
     Optional<Seat> findByIdWithPessimisticLock(Long seatId);
 

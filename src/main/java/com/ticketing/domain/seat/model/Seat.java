@@ -20,13 +20,8 @@ public class Seat extends BaseEntity {
     private Integer seatNo;
     private String grade;
     private BigDecimal price;
-
     private Long memberId;
-
     private SeatStatus status;
-
-    // 낙관적 락
-    private Long version;
 
     public enum SeatStatus {
         AVAILABLE, TEMPORARY, SOLD_OUT

@@ -1,5 +1,5 @@
--- KEYS[1]: 대기열 Key (queue:wait:{scheduleId})
--- KEYS[2]: 활성열 Key (queue:active:{scheduleId})
+-- KEYS[1]: 대기열 Key (queue:{id}:wait)
+-- KEYS[2]: 활성열 Key (queue:{id}:active)
 -- ARGV[1]: 최대 허용 인원 (MAX_ACTIVE)
 -- ARGV[2]: 한 번에 입장시킬 인원 (BATCH_SIZE)
 -- ARGV[3]: 활성 만료 시간 (현재시간 + 5분)

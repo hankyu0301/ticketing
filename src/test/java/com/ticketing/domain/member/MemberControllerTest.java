@@ -5,7 +5,6 @@ import com.ticketing.domain.member.controller.MemberController;
 import com.ticketing.domain.member.dto.MemberSignupRequest;
 import com.ticketing.domain.member.dto.MemberSignupResponse;
 import com.ticketing.domain.member.service.MemberService;
-import com.ticketing.global.interceptor.QueueAccessInterceptor;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,9 +34,6 @@ public class MemberControllerTest {
 
     @MockitoBean
     MemberService memberService;
-
-    @MockitoBean
-    QueueAccessInterceptor queueAccessInterceptor;
 
     @Test
     @DisplayName("회원가입 성공 테스트 - 201 Created 반환")

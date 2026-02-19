@@ -3,6 +3,7 @@ package com.ticketing.domain.seat.controller;
 import com.ticketing.domain.seat.dto.SeatCreateRequest;
 import com.ticketing.domain.seat.dto.SeatResponse;
 import com.ticketing.domain.seat.service.SeatService;
+import com.ticketing.global.aop.ActiveTokenRequired;
 import com.ticketing.global.common.response.ResponseDTO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ public class SeatController {
         return ResponseEntity.ok(ResponseDTO.getSuccessResult(null));
     }
 
+    @ActiveTokenRequired
     @GetMapping
     public ResponseEntity<ResponseDTO<List<SeatResponse>>> getSeats(
             @PathVariable Long scheduleId) {

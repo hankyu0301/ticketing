@@ -1,5 +1,5 @@
--- KEYS[1]: 대기열 Key (queue:wait:{scheduleId})
--- KEYS[2]: 활성열 Key (queue:active:{scheduleId})
+-- KEYS[1]: 대기열 Key (queue:{id}:wait)
+-- KEYS[2]: 활성열 Key (queue{id}:active)
 -- ARGV[1]: 사용자 ID (memberId)
 
 -- 1. 활성 상태(이미 입장함)인지 확인

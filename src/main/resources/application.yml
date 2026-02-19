@@ -8,6 +8,11 @@ spring:
       flush-mode: on_save
       namespace: spring:session
 
+    cookie:
+      secure: false
+      http-only: true
+      path: /
+
   datasource:
     driver-class-name: org.mariadb.jdbc.Driver
     url: jdbc:mariadb://localhost:3306/ticketing?useUnicode=true&characterEncoding=utf8&allowMultiQueries=true
@@ -43,3 +48,7 @@ queue:
   max-active-member: 1000
   active-time-ms: 300000
   safety-ttl-days: 3
+
+ticketing:
+  lock:
+    strategy: LETTUCE

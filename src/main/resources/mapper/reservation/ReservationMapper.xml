@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ticketing.domain.reservation.mapper.ReservationMapper">
+
+    <insert id="save" useGeneratedKeys="true" keyProperty="reservationId">
+        INSERT INTO reservations
+        (member_id, schedule_id, seat_id, status, created_at, updated_at, expired_at)
+        VALUES
+            (#{memberId}, #{scheduleId}, #{seatId}, #{status}, NOW(), NOW(), #{expiredAt})
+    </insert>
+
+    <select id="findById" resultType="com.ticketing.domain.reservation.model.Reservation">
+        SELECT (reservation_id, member_id, seat_id, schedule_id, status, reserved_at, expired_at, created_at, updated_at)
+        FROM reservations
+        WHERE reservation_id = #{reservationId}
+    </select>
+
+    <select id="findAllByMemberId" resultType="com.ticketing.domain.reservation.model.Reservation">
+        SELECT reservation_id, member_id, seat_id, schedule_id, status, reserved_at, expired_at, created_at, updated_at
+        FROM reservations
+        WHERE member_id = #{memberId}
+    </select>
+</mapper>
