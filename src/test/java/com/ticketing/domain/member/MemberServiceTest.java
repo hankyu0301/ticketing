@@ -1,12 +1,11 @@
 package com.ticketing.domain.member;
 
 
-import com.ticketing.domain.member.dto.MemberSignupRequest;
-import com.ticketing.domain.member.dto.MemberSignupResponse;
-import com.ticketing.domain.member.mapper.MemberMapper;
-import com.ticketing.domain.member.service.MemberService;
-import com.ticketing.global.common.exception.member.MemberBadRequestException;
-import com.ticketing.global.common.response.ResponseDTO;
+import com.ticketing.api.member.dto.MemberSignupRequest;
+import com.ticketing.api.member.dto.MemberSignupResponse;
+import com.ticketing.infrastructure.persistence.member.MemberMapper;
+import com.ticketing.application.member.service.MemberService;
+import com.ticketing.domain.member.exception.MemberBadRequestException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,7 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import static com.ticketing.global.common.exception.member.MemberErrorMessage.DUPLICATED_EMAIL;
+import static com.ticketing.domain.member.exception.MemberErrorMessage.DUPLICATED_EMAIL;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;

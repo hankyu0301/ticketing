@@ -1,8 +1,8 @@
 package com.ticketing.domain.queue;
 
-import com.ticketing.domain.queue.dto.QueueResponse;
-import com.ticketing.domain.queue.repository.QueueRedisRepository;
-import com.ticketing.domain.queue.service.QueueService;
+import com.ticketing.api.queue.dto.QueueResponse;
+import com.ticketing.infrastructure.persistence.queue.QueueRedisRepository;
+import com.ticketing.application.queue.service.QueueService;
 import com.ticketing.global.common.exception.queue.QueueErrorMessage;
 import com.ticketing.global.common.exception.queue.QueueNotFoundException;
 import org.junit.jupiter.api.BeforeEach;

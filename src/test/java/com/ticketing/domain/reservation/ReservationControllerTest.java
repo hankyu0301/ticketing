@@ -1,11 +1,11 @@
 package com.ticketing.domain.reservation;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ticketing.domain.reservation.controller.ReservationController;
-import com.ticketing.domain.reservation.dto.ReservationCreateRequest;
-import com.ticketing.domain.reservation.dto.ReservationResponse;
+import com.ticketing.api.reservation.controller.ReservationController;
+import com.ticketing.api.reservation.dto.ReservationCreateRequest;
+import com.ticketing.api.reservation.dto.ReservationResponse;
 import com.ticketing.domain.reservation.model.Reservation;
-import com.ticketing.domain.reservation.service.ReservationService;
+import com.ticketing.application.reservation.service.ReservationService;
 import com.ticketing.global.security.service.CustomUserDetails;
 import com.ticketing.global.security.service.SessionMember;
 import org.junit.jupiter.api.DisplayName;

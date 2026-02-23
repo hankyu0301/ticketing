@@ -1,7 +1,7 @@
 package com.ticketing.domain.queue;
 
-import com.ticketing.domain.queue.repository.QueueRedisRepository;
-import com.ticketing.domain.queue.scheduler.QueueScheduler;
+import com.ticketing.infrastructure.persistence.queue.QueueRedisRepository;
+import com.ticketing.application.queue.scheduler.QueueScheduler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

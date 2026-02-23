@@ -1,0 +1,15 @@
+package com.ticketing.infrastructure.persistence.member;
+
+import com.ticketing.domain.member.model.Member;
+import org.apache.ibatis.annotations.Mapper;
+
+import java.util.Optional;
+
+@Mapper
+public interface MemberMapper {
+
+    Optional<Member> findByEmail(String email);
+    void insertMember(Member member);
+    boolean existByEmail(String email);
+    
+}

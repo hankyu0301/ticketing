@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
-<mapper namespace="com.ticketing.domain.concert.mapper.ConcertScheduleMapper">
+<mapper namespace="com.ticketing.infrastructure.persistence.concert.ConcertScheduleMapper">
 
     <insert id="insertSchedule" useGeneratedKeys="true" keyProperty="scheduleId">
         INSERT INTO concert_schedules

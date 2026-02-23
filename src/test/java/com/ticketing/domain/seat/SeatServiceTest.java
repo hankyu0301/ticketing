@@ -1,10 +1,10 @@
 package com.ticketing.domain.seat;
 
-import com.ticketing.domain.seat.dto.SeatCreateRequest;
-import com.ticketing.domain.seat.dto.SeatResponse;
-import com.ticketing.domain.seat.mapper.SeatMapper;
+import com.ticketing.api.seat.dto.SeatCreateRequest;
+import com.ticketing.api.seat.dto.SeatResponse;
+import com.ticketing.infrastructure.seat.mapper.SeatMapper;
 import com.ticketing.domain.seat.model.Seat;
-import com.ticketing.domain.seat.service.SeatService;
+import com.ticketing.application.seat.service.SeatService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

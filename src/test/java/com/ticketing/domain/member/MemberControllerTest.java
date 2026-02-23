@@ -1,10 +1,10 @@
 package com.ticketing.domain.member;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ticketing.domain.member.controller.MemberController;
-import com.ticketing.domain.member.dto.MemberSignupRequest;
-import com.ticketing.domain.member.dto.MemberSignupResponse;
-import com.ticketing.domain.member.service.MemberService;
+import com.ticketing.api.member.controller.MemberController;
+import com.ticketing.api.member.dto.MemberSignupRequest;
+import com.ticketing.api.member.dto.MemberSignupResponse;
+import com.ticketing.application.member.service.MemberService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

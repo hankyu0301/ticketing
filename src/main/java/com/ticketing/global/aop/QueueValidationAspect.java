@@ -1,6 +1,6 @@
 package com.ticketing.global.aop;
 
-import com.ticketing.domain.queue.repository.QueueRedisRepository;
+import com.ticketing.infrastructure.persistence.queue.QueueRedisRepository;
 import com.ticketing.global.common.exception.queue.QueueErrorMessage;
 import com.ticketing.global.common.exception.queue.QueueNotFoundException;
 import com.ticketing.global.security.service.CustomUserDetails;
