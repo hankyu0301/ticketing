@@ -1,8 +1,8 @@
 package com.ticketing.domain.seat.model;
 
 import com.ticketing.global.common.BaseEntity;
-import com.ticketing.global.common.exception.seat.SeatAlreadyReservedException;
-import com.ticketing.global.common.exception.seat.SeatErrorMessage;
+import com.ticketing.domain.seat.exception.SeatAlreadyReservedException;
+import com.ticketing.domain.seat.exception.SeatErrorMessage;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;

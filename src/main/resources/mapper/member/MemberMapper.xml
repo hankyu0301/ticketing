@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
-<mapper namespace="com.ticketing.domain.member.mapper.MemberMapper">
+<mapper namespace="com.ticketing.infrastructure.persistence.member.MemberMapper">
     <select id="findByEmail" resultType="Member">
         SELECT member_id, email, password, nickname, point, created_at, updated_at FROM members WHERE email = #{email}
     </select>

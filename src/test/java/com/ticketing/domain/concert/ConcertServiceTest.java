@@ -1,16 +1,16 @@
 package com.ticketing.domain.concert;
 
-import com.ticketing.domain.concert.dto.ConcertCreateRequest;
-import com.ticketing.domain.concert.dto.ConcertDto;
-import com.ticketing.domain.concert.dto.ConcertScheduleCreateRequest;
-import com.ticketing.domain.concert.dto.ConcertScheduleDto;
-import com.ticketing.domain.concert.mapper.ConcertMapper;
-import com.ticketing.domain.concert.mapper.ConcertScheduleMapper;
+import com.ticketing.api.concert.dto.ConcertCreateRequest;
+import com.ticketing.api.concert.dto.ConcertDto;
+import com.ticketing.api.concert.dto.ConcertScheduleCreateRequest;
+import com.ticketing.api.concert.dto.ConcertScheduleDto;
+import com.ticketing.infrastructure.persistence.concert.ConcertMapper;
+import com.ticketing.infrastructure.persistence.concert.ConcertScheduleMapper;
 import com.ticketing.domain.concert.model.Concert;
 import com.ticketing.domain.concert.model.ConcertSchedule;
-import com.ticketing.domain.concert.service.ConcertService;
-import com.ticketing.global.common.exception.concert.ConcertErrorMessage;
-import com.ticketing.global.common.exception.concert.ConcertNotFoundException;
+import com.ticketing.application.concert.service.ConcertService;
+import com.ticketing.domain.concert.exception.ConcertErrorMessage;
+import com.ticketing.domain.concert.exception.ConcertNotFoundException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

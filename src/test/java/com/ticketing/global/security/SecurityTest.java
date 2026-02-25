@@ -1,7 +1,7 @@
 package com.ticketing.global.security;
 
-import com.ticketing.domain.member.dto.MemberSignupRequest;
-import com.ticketing.domain.member.service.MemberService;
+import com.ticketing.api.member.dto.MemberSignupRequest;
+import com.ticketing.application.member.service.MemberService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

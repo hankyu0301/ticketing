@@ -1,12 +1,12 @@
 package com.ticketing.support;
 
-import com.ticketing.domain.concert.mapper.ConcertMapper;
-import com.ticketing.domain.concert.mapper.ConcertScheduleMapper;
+import com.ticketing.infrastructure.persistence.concert.ConcertMapper;
+import com.ticketing.infrastructure.persistence.concert.ConcertScheduleMapper;
 import com.ticketing.domain.concert.model.Concert;
 import com.ticketing.domain.concert.model.ConcertSchedule;
-import com.ticketing.domain.member.mapper.MemberMapper;
+import com.ticketing.infrastructure.persistence.member.MemberMapper;
 import com.ticketing.domain.member.model.Member;
-import com.ticketing.domain.seat.mapper.SeatMapper;
+import com.ticketing.infrastructure.seat.mapper.SeatMapper;
 import com.ticketing.domain.seat.model.Seat;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;

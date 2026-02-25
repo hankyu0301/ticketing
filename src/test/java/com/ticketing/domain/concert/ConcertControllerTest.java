@@ -1,14 +1,14 @@
 package com.ticketing.domain.concert;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ticketing.domain.concert.controller.ConcertController;
-import com.ticketing.domain.concert.dto.ConcertCreateRequest;
-import com.ticketing.domain.concert.dto.ConcertDto;
-import com.ticketing.domain.concert.dto.ConcertScheduleCreateRequest;
+import com.ticketing.api.concert.controller.ConcertController;
+import com.ticketing.api.concert.dto.ConcertCreateRequest;
+import com.ticketing.api.concert.dto.ConcertDto;
+import com.ticketing.api.concert.dto.ConcertScheduleCreateRequest;
 import com.ticketing.domain.concert.model.Concert;
-import com.ticketing.domain.concert.service.ConcertService;
-import com.ticketing.global.common.exception.concert.ConcertErrorMessage;
-import com.ticketing.global.common.exception.concert.ConcertNotFoundException;
+import com.ticketing.application.concert.service.ConcertService;
+import com.ticketing.domain.concert.exception.ConcertErrorMessage;
+import com.ticketing.domain.concert.exception.ConcertNotFoundException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

@@ -1,11 +1,11 @@
 package com.ticketing.domain.seat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ticketing.domain.seat.controller.SeatController;
-import com.ticketing.domain.seat.dto.SeatCreateRequest;
-import com.ticketing.domain.seat.dto.SeatResponse;
+import com.ticketing.api.seat.controller.SeatController;
+import com.ticketing.api.seat.dto.SeatCreateRequest;
+import com.ticketing.api.seat.dto.SeatResponse;
 import com.ticketing.domain.seat.model.Seat;
-import com.ticketing.domain.seat.service.SeatService;
+import com.ticketing.application.seat.service.SeatService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

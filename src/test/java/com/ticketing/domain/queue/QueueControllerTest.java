@@ -1,9 +1,9 @@
 package com.ticketing.domain.queue;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ticketing.domain.queue.controller.QueueController;
-import com.ticketing.domain.queue.dto.QueueResponse;
-import com.ticketing.domain.queue.service.QueueService;
+import com.ticketing.api.queue.controller.QueueController;
+import com.ticketing.api.queue.dto.QueueResponse;
+import com.ticketing.application.queue.service.QueueService;
 import com.ticketing.global.common.exception.queue.QueueErrorMessage;
 import com.ticketing.global.common.exception.queue.QueueNotFoundException;
 import com.ticketing.global.security.service.CustomUserDetails;

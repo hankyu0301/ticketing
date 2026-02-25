@@ -1,6 +1,6 @@
 package com.ticketing.global.security.service;
 
-import com.ticketing.domain.member.mapper.MemberMapper;
+import com.ticketing.infrastructure.persistence.member.MemberMapper;
 import com.ticketing.domain.member.model.Member;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.Collections;
 
-import static com.ticketing.global.common.exception.member.MemberErrorMessage.NOT_EXIST_MEMBER;
+import static com.ticketing.domain.member.exception.MemberErrorMessage.NOT_EXIST_MEMBER;
 
 @Service
 @RequiredArgsConstructor

@@ -1,7 +1,7 @@
 package com.ticketing.domain.queue;
 
-import com.ticketing.domain.queue.dto.QueueResponse;
-import com.ticketing.domain.queue.service.QueueService;
+import com.ticketing.api.queue.dto.QueueResponse;
+import com.ticketing.application.queue.service.QueueService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
