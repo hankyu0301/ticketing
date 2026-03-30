@@ -1,10 +1,11 @@
--- KEYS[1]: 대기열 Key (queue:{id}:wait)
--- KEYS[2]: 활성열 Key (queue:{id}:active)
--- KEYS[3]: queue:{id}:score
--- ARGV[1]: 사용자 ID (memberId)
--- ARGV[2]: 최대 허용 인원 (limit / maxActive)
--- ARGV[3]: 활성 만료 시간 (expireAt)
--- ARGV[4]: TTL (Key 만료 시간)
+-- KEYS[1]: waiting queue key
+-- KEYS[2]: active queue key
+-- KEYS[3]: sequence key
+-- ARGV[1]: member id
+-- ARGV[2]: max active members
+-- ARGV[3]: active expiration timestamp (ms)
+-- ARGV[4]: key ttl (seconds)
+-- ARGV[5]: current timestamp (ms)
 
 local waitKey = KEYS[1]
 local activeKey = KEYS[2]
@@ -14,32 +15,40 @@ local memberId = ARGV[1]
 local limit = tonumber(ARGV[2])
 local expireAt = ARGV[3]
 local ttl = tonumber(ARGV[4])
+local now = tonumber(ARGV[5])
 
--- 1. 현재 활성 인원 체크
+local activeScore = redis.call('ZSCORE', activeKey, memberId)
+if activeScore then
+    if tonumber(activeScore) <= now then
+        redis.call('ZREM', activeKey, memberId)
+    else
+        return -100
+    end
+end
+
+local existingRank = redis.call('ZRANK', waitKey, memberId)
+if existingRank ~= false then
+    return existingRank
+end
+
+redis.call('ZREMRANGEBYSCORE', activeKey, '-inf', now)
+
 local activeCount = redis.call('ZCARD', activeKey)
-
--- 2. 대기열 인원 체크 (내가 들어가기 전 상태)
 local waitCount = redis.call('ZCARD', waitKey)
 
--- [Free Pass 조건]
--- 활성열에 자리가 있고(activeCount < limit) AND 대기열이 비어있으면(waitCount == 0)
 if activeCount < limit and waitCount == 0 then
-    -- 즉시 활성열 등록
     redis.call('ZADD', activeKey, expireAt, memberId)
     redis.call('EXPIRE', activeKey, ttl)
-    return -100 -- 입장 성공 코드
+    return -100
 end
 
 local score = redis.call('INCR', seqKey)
 redis.call('EXPIRE', seqKey, ttl)
 
--- [일반 대기 진입]
--- 자리가 없거나 이미 줄 선 사람이 있으면 대기열로
 redis.call('ZADD', waitKey, 'NX', score, memberId)
 redis.call('EXPIRE', waitKey, ttl)
--- 내 순번 반환
-local rank = redis.call('ZRANK', waitKey, memberId)
 
+local rank = redis.call('ZRANK', waitKey, memberId)
 if rank == false then
     return -1
 end
