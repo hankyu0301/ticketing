@@ -42,73 +42,117 @@ class QueueRedisTest {
     }
 
     @Test
-    @DisplayName("활성열이 비어있으면 -> 대기 없이 즉시 입장 (Free Pass)")
+    @DisplayName("active가 비어 있으면 대기 없이 즉시 입장한다")
     void logic_enter_freePass() {
-        // given
         Long memberId = 100L;
-        // when
+
         Long result = queueRedisRepository.register(SCHEDULE_ID, memberId, TEST_MAX_ACTIVE, 300000);
-        // then
+
         assertThat(result).isEqualTo(-100L);
         assertThat(isMemberInActive(memberId)).isTrue();
     }
 
     @Test
-    @DisplayName("활성열이 꽉 찼으면 -> 대기열 진입 및 순번 발급")
+    @DisplayName("이미 active인 사용자는 재진입해도 active 상태를 유지하고 대기열에 중복 등록되지 않는다")
+    void logic_enter_activeMemberAgain() {
+        Long memberId = 100L;
+        queueRedisRepository.register(SCHEDULE_ID, memberId, TEST_MAX_ACTIVE, 300000);
+
+        Long result = queueRedisRepository.register(SCHEDULE_ID, memberId, TEST_MAX_ACTIVE, 300000);
+
+        assertThat(result).isEqualTo(-100L);
+        assertThat(zCard(getActiveKey())).isEqualTo(1L);
+        assertThat(zCard(getWaitKey())).isEqualTo(0L);
+    }
+
+    @Test
+    @DisplayName("active가 가득 차면 사용자는 대기열에 들어가고 순번을 받는다")
     void logic_enter_wait() {
-        // given: 정원(10명)을 채움
         for (long i = 1; i <= TEST_MAX_ACTIVE; i++) {
             queueRedisRepository.register(SCHEDULE_ID, i, TEST_MAX_ACTIVE, 300000);
         }
 
-        // when: 11번째 유저 입장
         Long memberId = 999L;
         Long result = queueRedisRepository.register(SCHEDULE_ID, memberId, TEST_MAX_ACTIVE, 300000);
 
-        // then: 대기열 1등(index 0)이어야 함
         assertThat(result).isEqualTo(0L);
         assertThat(isMemberInWait(memberId)).isTrue();
     }
 
     @Test
-    @DisplayName("스케줄러 이동: 빈 자리가 생기면 대기자를 활성열로 이동")
-    void logic_scheduler_move() {
-        // given: 정원 1명으로 제한하여 테스트
-        long tinyMax = 1L;
-        queueRedisRepository.register(SCHEDULE_ID, 100L, tinyMax, 300000); // Active
-        queueRedisRepository.register(SCHEDULE_ID, 200L, tinyMax, 300000); // Wait
+    @DisplayName("이미 대기열에 있는 사용자는 재진입해도 기존 순번을 반환하고 중복 등록되지 않는다")
+    void logic_enter_waitingMemberAgain() {
+        for (long i = 1; i <= TEST_MAX_ACTIVE; i++) {
+            queueRedisRepository.register(SCHEDULE_ID, i, TEST_MAX_ACTIVE, 300000);
+        }
 
-        // 강제 퇴장 (빈자리 생성)
+        Long memberId = 999L;
+        queueRedisRepository.register(SCHEDULE_ID, memberId, TEST_MAX_ACTIVE, 300000);
+
+        Long result = queueRedisRepository.register(SCHEDULE_ID, memberId, TEST_MAX_ACTIVE, 300000);
+
+        assertThat(result).isEqualTo(0L);
+        assertThat(zCard(getWaitKey())).isEqualTo(1L);
+        assertThat(isMemberInWait(memberId)).isTrue();
+    }
+
+    @Test
+    @DisplayName("스케줄러는 빈 자리가 생기면 대기열 사용자를 active로 이동시킨다")
+    void logic_scheduler_move() {
+        long tinyMax = 1L;
+        queueRedisRepository.register(SCHEDULE_ID, 100L, tinyMax, 300000);
+        queueRedisRepository.register(SCHEDULE_ID, 200L, tinyMax, 300000);
+
         queueRedisRepository.removeActiveMember(SCHEDULE_ID, 100L);
 
-        // when: 스케줄러 동작
         List<String> moved = queueRedisRepository.moveUsersToActive(SCHEDULE_ID, tinyMax, 10, 300000);
 
-        // then
         assertThat(moved).hasSize(1);
         assertThat(moved.get(0)).isEqualTo("200");
         assertThat(isMemberInActive(200L)).isTrue();
     }
 
     @Test
-    @DisplayName("스케줄 관리 등록: 중복 호출해도 Set에는 하나만 존재해야 함")
+    @DisplayName("중복으로 추가해도 processing schedule set에는 하나만 저장된다")
     void logic_manage_set() {
-        // given & when
         queueRedisRepository.addProcessingSchedule(SCHEDULE_ID);
         queueRedisRepository.addProcessingSchedule(SCHEDULE_ID);
         queueRedisRepository.addProcessingSchedule(SCHEDULE_ID);
 
-        // then
         Set<Long> schedules = queueRedisRepository.getProcessingSchedules();
         assertThat(schedules).hasSize(1);
         assertThat(schedules).contains(SCHEDULE_ID);
     }
 
+    @Test
+    @DisplayName("만료된 active 토큰은 상태 조회 시 제거되고 not found로 처리된다")
+    void logic_status_expiredActiveRemoved() {
+        Long memberId = 777L;
+        redisTemplate.opsForZSet().add(getActiveKey(), memberId.toString(), System.currentTimeMillis() - 1_000);
+
+        Long result = queueRedisRepository.getRank(SCHEDULE_ID, memberId);
+
+        assertThat(result).isEqualTo(-1L);
+        assertThat(isMemberInActive(memberId)).isFalse();
+    }
+
     private boolean isMemberInActive(Long memberId) {
-        return redisTemplate.opsForZSet().score("queue:{" + SCHEDULE_ID + "}:active", memberId.toString()) != null;
+        return redisTemplate.opsForZSet().score(getActiveKey(), memberId.toString()) != null;
     }
 
     private boolean isMemberInWait(Long memberId) {
-        return redisTemplate.opsForZSet().score("queue:{" + SCHEDULE_ID + "}:wait", memberId.toString()) != null;
+        return redisTemplate.opsForZSet().score(getWaitKey(), memberId.toString()) != null;
+    }
+
+    private Long zCard(String key) {
+        return redisTemplate.opsForZSet().zCard(key);
+    }
+
+    private String getActiveKey() {
+        return "queue:{" + SCHEDULE_ID + "}:active";
+    }
+
+    private String getWaitKey() {
+        return "queue:{" + SCHEDULE_ID + "}:wait";
     }
 }

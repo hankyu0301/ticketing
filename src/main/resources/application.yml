@@ -51,4 +51,7 @@ queue:
 
 ticketing:
   lock:
-    strategy: LETTUCE
+    strategy: REDISSON
+    wait-time-ms: 10000
+    retry-interval-ms: 100
+    lease-time-ms: 3000

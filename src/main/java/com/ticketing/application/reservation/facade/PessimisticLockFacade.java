@@ -19,7 +19,7 @@ public class PessimisticLockFacade implements ReservationFacade {
     @Override
     @Transactional
     public ReservationResponse reserve(Long memberId, ReservationCreateRequest req) {
-        Reservation reservation = reservationService.reserve(req.getSeatId(), memberId, req.getSeatId());
+        Reservation reservation = reservationService.reserve(req.getSeatId(), memberId, req.getScheduleId());
         return new ReservationResponse(reservation);
     }
 }
