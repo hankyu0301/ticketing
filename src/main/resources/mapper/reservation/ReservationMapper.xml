@@ -11,7 +11,7 @@
     </insert>
 
     <select id="findById" resultType="com.ticketing.domain.reservation.model.Reservation">
-        SELECT (reservation_id, member_id, seat_id, schedule_id, status, reserved_at, expired_at, created_at, updated_at)
+        SELECT reservation_id, member_id, seat_id, schedule_id, status, reserved_at, expired_at, created_at, updated_at
         FROM reservations
         WHERE reservation_id = #{reservationId}
     </select>

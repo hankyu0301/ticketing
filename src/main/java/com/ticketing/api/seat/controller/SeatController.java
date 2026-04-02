@@ -4,6 +4,7 @@ import com.ticketing.api.seat.dto.SeatCreateRequest;
 import com.ticketing.api.seat.dto.SeatResponse;
 import com.ticketing.application.seat.service.SeatService;
 import com.ticketing.global.aop.ActiveTokenRequired;
+import com.ticketing.global.aop.ScheduleIdParam;
 import com.ticketing.global.common.response.ResponseDTO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -30,7 +31,7 @@ public class SeatController {
     @ActiveTokenRequired
     @GetMapping
     public ResponseEntity<ResponseDTO<List<SeatResponse>>> getSeats(
-            @PathVariable Long scheduleId) {
+            @ScheduleIdParam @PathVariable Long scheduleId) {
         List<SeatResponse> seats = seatService.getSeats(scheduleId);
         return ResponseEntity.ok(ResponseDTO.getSuccessResult(seats));
     }
