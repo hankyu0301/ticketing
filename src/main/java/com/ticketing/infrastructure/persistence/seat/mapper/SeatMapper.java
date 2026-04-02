@@ -1,4 +1,4 @@
-package com.ticketing.infrastructure.seat.mapper;
+package com.ticketing.infrastructure.persistence.seat.mapper;
 
 import com.ticketing.domain.seat.model.Seat;
 import org.apache.ibatis.annotations.Mapper;
