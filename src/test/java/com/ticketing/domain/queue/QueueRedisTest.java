@@ -125,6 +125,22 @@ class QueueRedisTest {
     }
 
     @Test
+    @DisplayName("wait와 active가 모두 비면 processing schedule에서 자동 제거된다")
+    void logic_cleanup_processingSchedule_whenQueueDrained() {
+        long tinyMax = 1L;
+        queueRedisRepository.addProcessingSchedule(SCHEDULE_ID);
+        queueRedisRepository.register(SCHEDULE_ID, 100L, tinyMax, 300000);
+        queueRedisRepository.register(SCHEDULE_ID, 200L, tinyMax, 300000);
+
+        queueRedisRepository.removeActiveMember(SCHEDULE_ID, 100L);
+        queueRedisRepository.moveUsersToActive(SCHEDULE_ID, tinyMax, 10, 300000);
+        queueRedisRepository.removeActiveMember(SCHEDULE_ID, 200L);
+
+        Set<Long> schedules = queueRedisRepository.getProcessingSchedules();
+        assertThat(schedules).doesNotContain(SCHEDULE_ID);
+    }
+
+    @Test
     @DisplayName("만료된 active 토큰은 상태 조회 시 제거되고 not found로 처리된다")
     void logic_status_expiredActiveRemoved() {
         Long memberId = 777L;

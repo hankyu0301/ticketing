@@ -1,5 +1,9 @@
 server:
   port: 8080
+  servlet:
+    session:
+      cookie:
+        same-site: lax
 
 spring:
   session:
@@ -44,10 +48,16 @@ logging:
     com.project.ticketing: DEBUG
 
 queue:
+  enter-batch-size: 50
   estimated-throughput: 50
   max-active-member: 1000
   active-time-ms: 300000
   safety-ttl-days: 3
+
+scheduler:
+  fixed-delay: 1000
+  lock-at-least-for: PT1S
+  lock-at-most-for: PT10S
 
 ticketing:
   lock:
