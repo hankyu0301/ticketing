@@ -4,7 +4,9 @@
 
 <mapper namespace="com.ticketing.infrastructure.persistence.member.MemberMapper">
     <select id="findByEmail" resultType="Member">
-        SELECT member_id, email, password, nickname, point, created_at, updated_at FROM members WHERE email = #{email}
+        SELECT member_id, email, password, nickname, role, point, created_at, updated_at
+        FROM members
+        WHERE email = #{email}
     </select>
 
     <select id="existByEmail" resultType="boolean">
@@ -15,7 +17,7 @@
     </select>
 
     <insert id="insertMember" useGeneratedKeys="true" keyProperty="memberId">
-        INSERT INTO members (email, password, nickname, point, created_at, updated_at)
-        VALUES (#{email}, #{password}, #{nickname}, 0, NOW(), NOW())
+        INSERT INTO members (email, password, nickname, role, point, created_at, updated_at)
+        VALUES (#{email}, #{password}, #{nickname}, #{role}, 0, NOW(), NOW())
     </insert>
 </mapper>

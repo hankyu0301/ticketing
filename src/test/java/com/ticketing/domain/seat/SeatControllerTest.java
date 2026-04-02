@@ -44,7 +44,7 @@ class SeatControllerTest {
 
     @Test
     @DisplayName("[SUCCESS] 좌석 생성 API 성공")
-    @WithMockUser
+    @WithMockUser(roles = "ADMIN")
     void createSeats_success() throws Exception {
         // given
         Long scheduleId = 1L;
@@ -95,7 +95,7 @@ class SeatControllerTest {
 
     @Test
     @DisplayName("[FAIL] 좌석 생성 실패 : 유효성 검증 실패")
-    @WithMockUser
+    @WithMockUser(roles = "ADMIN")
     void createSeats_fail_validation() throws Exception {
         // given
         Long scheduleId = 1L;

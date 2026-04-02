@@ -10,18 +10,18 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestBuilders;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestBuilders.formLogin;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.authenticated;
 import static org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.unauthenticated;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -79,9 +79,10 @@ public class SecurityTest {
     @Test
     @DisplayName("[SUCCESS] 로그인 성공")
     void login_success() throws Exception {
-        mockMvc.perform(formLogin(MEMBER_LOGIN_URL)
-                        .user("email",MEMBER_LOGIN_EMAIL)
-                        .password("password", MEMBER_LOGIN_PASSWORD))
+        mockMvc.perform(post(MEMBER_LOGIN_URL)
+                        .with(csrf())
+                        .param("email", MEMBER_LOGIN_EMAIL)
+                        .param("password", MEMBER_LOGIN_PASSWORD))
                 .andDo(print())
                 .andExpect(authenticated())
                 .andExpect(status().is2xxSuccessful());
@@ -99,9 +100,10 @@ public class SecurityTest {
     @DisplayName("[ERROR] 로그인 실패 : 비밀번호 불일치")
     public void login_fail_with_wrong_pwsd() throws Exception {
         String invalidPassword = "ab";
-        mockMvc.perform(formLogin(MEMBER_LOGIN_URL)
-                        .user("email",MEMBER_LOGIN_EMAIL)
-                        .password("password", invalidPassword))
+        mockMvc.perform(post(MEMBER_LOGIN_URL)
+                        .with(csrf())
+                        .param("email", MEMBER_LOGIN_EMAIL)
+                        .param("password", invalidPassword))
                 .andDo(print())
                 .andExpect(unauthenticated())
                 .andExpect(status().is4xxClientError());
@@ -111,9 +113,10 @@ public class SecurityTest {
     @DisplayName("[ERROR] 로그인 실패 : 존재하지 않는 유저")
     void login_fail_not_exist() throws Exception{
         String invalidEmail = "존재하지 않는 유저";
-        mockMvc.perform(formLogin(MEMBER_LOGIN_URL)
-                        .user("email", invalidEmail)
-                        .password("password", MEMBER_LOGIN_PASSWORD))
+        mockMvc.perform(post(MEMBER_LOGIN_URL)
+                        .with(csrf())
+                        .param("email", invalidEmail)
+                        .param("password", MEMBER_LOGIN_PASSWORD))
                 .andDo(print())
                 .andExpect(unauthenticated())
                 .andExpect(status().is4xxClientError());
@@ -122,7 +125,7 @@ public class SecurityTest {
     @Test
     @DisplayName("[SUCCESS] 로그아웃")
     void logout() throws Exception{
-        mockMvc.perform(SecurityMockMvcRequestBuilders.logout("/api/v1/members/logout"))
+        mockMvc.perform(post("/api/v1/members/logout").with(csrf()))
                 .andDo(print())
                 .andExpect(unauthenticated())
                 .andExpect(status().isOk());
