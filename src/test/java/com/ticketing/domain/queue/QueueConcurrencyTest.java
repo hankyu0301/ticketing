@@ -2,6 +2,9 @@ package com.ticketing.domain.queue;
 
 import com.ticketing.api.queue.dto.QueueResponse;
 import com.ticketing.application.queue.service.QueueService;
+import com.ticketing.support.DatabaseCleaner;
+import com.ticketing.support.TicketingTestDataSetup;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,18 +42,30 @@ class QueueConcurrencyTest {
     @Autowired
     private RedisTemplate<String, String> redisTemplate;
 
+    @Autowired
+    private TicketingTestDataSetup testDataSetup;
+
+    @Autowired
+    private DatabaseCleaner databaseCleaner;
+
     private static final int THREAD_COUNT = 100;
-    private static final long SCHEDULE_ID = 1L;
+    private long scheduleId;
 
     @BeforeEach
     void setUp() {
         redisTemplate.getConnectionFactory().getConnection().serverCommands().flushAll();
+        TicketingTestDataSetup.TestData testData = testDataSetup.setupConcertAndSeat();
+        this.scheduleId = testData.scheduleId();
+    }
+
+    @AfterEach
+    void tearDown() {
+        databaseCleaner.execute();
     }
 
     @Test
-    @DisplayName("100명이 동시에 접속했을 때, 10명은 즉시 입장하고 90명은 정확한 순번을 받는다.")
+    @DisplayName("100명이 동시에 접속했을 때 10명은 즉시 입장하고 90명은 정확한 순번을 받는다")
     void concurrent_enter_queue_test() throws InterruptedException {
-        // given
         ExecutorService executorService = Executors.newFixedThreadPool(32);
         CountDownLatch latch = new CountDownLatch(THREAD_COUNT);
 
@@ -58,49 +73,44 @@ class QueueConcurrencyTest {
         AtomicInteger successCount = new AtomicInteger();
         AtomicInteger failCount = new AtomicInteger();
 
-        // when
         for (int i = 0; i < THREAD_COUNT; i++) {
             long memberId = i + 1;
             executorService.submit(() -> {
                 try {
-                    QueueResponse response = queueService.enterQueue(SCHEDULE_ID, memberId);
-                    if (response.isEntered()) {
-                        System.out.println("User " + memberId + " -> Active (예매 활성화)");
-                    } else {
+                    QueueResponse response = queueService.enterQueue(scheduleId, memberId);
+                    if (!response.isEntered()) {
                         ranks.add(response.getRank());
-                        System.out.println("User " + memberId + " -> Wait Rank: " + response.getRank());
                     }
                     successCount.incrementAndGet();
                 } catch (Exception e) {
                     failCount.incrementAndGet();
-                    e.printStackTrace();
                 } finally {
                     latch.countDown();
                 }
             });
         }
+
         latch.await();
 
-        // then
-        // 1. 에러 없음 확인
         assertThat(successCount.get()).isEqualTo(100);
         assertThat(failCount.get()).isEqualTo(0);
 
-        // 2. Redis 상태 검증
         Long activeCount = redisTemplate.opsForZSet().zCard(getActiveKey());
         assertThat(activeCount).isEqualTo(10L);
 
-        // 3. 대기열 검증 (90명)
         Set<String> waitingMembers = redisTemplate.opsForZSet().range(getWaitKey(), 0, -1);
-
         assertThat(waitingMembers).isNotNull();
         assertThat(waitingMembers.size()).isEqualTo(90);
 
-        // 4. 순번 검증
         assertThat(ranks).hasSize(90);
         assertThat(Collections.max(ranks)).isEqualTo(90L);
     }
 
-    private String getActiveKey() { return "queue:{"+SCHEDULE_ID+"}:active"; }
-    private String getWaitKey() { return "queue:{"+SCHEDULE_ID+"}:wait"; }
+    private String getActiveKey() {
+        return "queue:{" + scheduleId + "}:active";
+    }
+
+    private String getWaitKey() {
+        return "queue:{" + scheduleId + "}:wait";
+    }
 }
