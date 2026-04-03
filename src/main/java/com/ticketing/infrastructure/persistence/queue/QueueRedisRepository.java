@@ -9,7 +9,6 @@ import org.springframework.stereotype.Repository;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Repository
@@ -17,12 +16,12 @@ import java.util.stream.Collectors;
 public class QueueRedisRepository {
 
     private final RedisTemplate<String, String> redisTemplate;
-    private final Set<Long> localCache = ConcurrentHashMap.newKeySet();
 
     private final RedisScript<Long> queueEnterScript;
     private final RedisScript<Long> queueStatusScript;
     private final RedisScript<List> activeMemberScript;
     private final RedisScript<Long> validExtensionScript;
+    private final RedisScript<Long> cleanupProcessingScheduleScript;
 
     private static final String PROCESSING_SCHEDULES_KEY = "queue:processing_schedules";
 
@@ -52,12 +51,18 @@ public class QueueRedisRepository {
         String waitKey = getWaitKey(scheduleId);
         String activeKey = getActiveKey(scheduleId);
 
-        return redisTemplate.execute(
+        Long rank = redisTemplate.execute(
                 queueStatusScript,
                 List.of(waitKey, activeKey),
                 memberId.toString(),
                 String.valueOf(System.currentTimeMillis())
         );
+
+        if (rank != null && rank == -1L) {
+            cleanupProcessingScheduleIfDrained(scheduleId);
+        }
+
+        return rank;
     }
 
     public boolean validateAndExtendActiveMember(Long scheduleId, Long memberId) {
@@ -73,7 +78,11 @@ public class QueueRedisRepository {
                 String.valueOf(newExpireAt)
         );
 
-        return result != null && result == 1L;
+        boolean isActive = result != null && result == 1L;
+        if (!isActive) {
+            cleanupProcessingScheduleIfDrained(scheduleId);
+        }
+        return isActive;
     }
 
     public List<String> moveUsersToActive(Long scheduleId, long maxActive, long batchSize, long activeTimeMs) {
@@ -82,7 +91,7 @@ public class QueueRedisRepository {
         long now = System.currentTimeMillis();
         long expireAt = now + activeTimeMs;
 
-        return redisTemplate.execute(
+        List<String> movedMembers = redisTemplate.execute(
                 activeMemberScript,
                 List.of(waitKey, activeKey),
                 String.valueOf(maxActive),
@@ -90,23 +99,23 @@ public class QueueRedisRepository {
                 String.valueOf(expireAt),
                 String.valueOf(now)
         );
+
+        cleanupProcessingScheduleIfDrained(scheduleId);
+        return movedMembers;
     }
 
     public void removeActiveMember(Long scheduleId, Long memberId) {
         redisTemplate.opsForZSet().remove(getActiveKey(scheduleId), memberId.toString());
+        cleanupProcessingScheduleIfDrained(scheduleId);
     }
 
     public void removeWaitingMember(Long scheduleId, Long memberId) {
         redisTemplate.opsForZSet().remove(getWaitKey(scheduleId), memberId.toString());
+        cleanupProcessingScheduleIfDrained(scheduleId);
     }
 
     public void addProcessingSchedule(Long scheduleId) {
-        if (localCache.contains(scheduleId)) {
-            return;
-        }
-
         redisTemplate.opsForSet().add(PROCESSING_SCHEDULES_KEY, scheduleId.toString());
-        localCache.add(scheduleId);
     }
 
     public Set<Long> getProcessingSchedules() {
@@ -123,7 +132,14 @@ public class QueueRedisRepository {
 
     public void removeProcessingSchedule(Long scheduleId) {
         redisTemplate.opsForSet().remove(PROCESSING_SCHEDULES_KEY, scheduleId.toString());
-        localCache.remove(scheduleId);
+    }
+
+    private void cleanupProcessingScheduleIfDrained(Long scheduleId) {
+        redisTemplate.execute(
+                cleanupProcessingScheduleScript,
+                List.of(getWaitKey(scheduleId), getActiveKey(scheduleId), PROCESSING_SCHEDULES_KEY),
+                scheduleId.toString()
+        );
     }
 
     private String getWaitKey(Long scheduleId) {

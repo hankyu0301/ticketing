@@ -2,7 +2,7 @@ package com.ticketing.domain.reservation;
 
 import com.ticketing.application.reservation.facade.ReservationFacade;
 import com.ticketing.api.reservation.dto.ReservationCreateRequest;
-import com.ticketing.infrastructure.seat.mapper.SeatMapper;
+import com.ticketing.infrastructure.persistence.seat.mapper.SeatMapper;
 import com.ticketing.domain.seat.model.Seat;
 import com.ticketing.support.DatabaseCleaner;
 import com.ticketing.support.IntegrationTestSupport;

@@ -6,7 +6,7 @@ import com.ticketing.domain.concert.model.Concert;
 import com.ticketing.domain.concert.model.ConcertSchedule;
 import com.ticketing.infrastructure.persistence.member.MemberMapper;
 import com.ticketing.domain.member.model.Member;
-import com.ticketing.infrastructure.seat.mapper.SeatMapper;
+import com.ticketing.infrastructure.persistence.seat.mapper.SeatMapper;
 import com.ticketing.domain.seat.model.Seat;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;

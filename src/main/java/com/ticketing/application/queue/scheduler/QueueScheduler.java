@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 @Component
 @RequiredArgsConstructor
@@ -21,7 +22,7 @@ public class QueueScheduler {
     @Value("${queue.max-active-member:1000}")
     private long maxActiveMember;
 
-    @Value("${queue.estimated-throughput:50}")
+    @Value("${queue.enter-batch-size:50}")
     private long enterBatchSize;
 
     @Value("${queue.active-time-ms:300000}")
@@ -29,9 +30,9 @@ public class QueueScheduler {
 
     @Scheduled(fixedDelayString = "${scheduler.fixed-delay:1000}")
     @SchedulerLock(
-            name = "QueueScheduler_processQueue", // 락 이름
-            lockAtLeastFor = "990ms", // 작업이 빨리 끝나도 0.99초간은 락을 쥐고 있음 (중복 실행 방지)
-            lockAtMostFor = "2000ms"  // 2초가 지나면 락을 강제 해제 (서버 다운 대비)
+            name = "QueueScheduler_processQueue",
+            lockAtLeastFor = "${scheduler.lock-at-least-for:PT1S}",
+            lockAtMostFor = "${scheduler.lock-at-most-for:PT10S}"
     )
     public void processQueue() {
         Set<Long> scheduleIds = queueRedisRepository.getProcessingSchedules();
@@ -39,8 +40,12 @@ public class QueueScheduler {
             return;
         }
 
-        // 리턴값은 입장 성공한 유저 목록
-        scheduleIds.parallelStream().forEach(scheduleId -> {
+        long startedAt = System.nanoTime();
+        int processedSchedules = 0;
+        int enteredMemberCount = 0;
+
+        for (Long scheduleId : scheduleIds) {
+            processedSchedules++;
             try {
                 List<String> enteredMembers = queueRedisRepository.moveUsersToActive(
                         scheduleId,
@@ -50,13 +55,17 @@ public class QueueScheduler {
                 );
 
                 if (enteredMembers != null && !enteredMembers.isEmpty()) {
-                    // 실제로 유저가 입장했을 때만 로그 출력
-                    log.info("[Schedule {}] {}명 입장 성공 (Members: {})",
+                    enteredMemberCount += enteredMembers.size();
+                    log.info("[Schedule {}] {} users entered (Members: {})",
                             scheduleId, enteredMembers.size(), enteredMembers);
                 }
             } catch (Exception e) {
-                log.error("[Schedule {}] 대기열 처리 중 오류 발생", scheduleId, e);
+                log.error("[Schedule {}] queue processing failed", scheduleId, e);
             }
-        });
+        }
+
+        long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
+        log.debug("QueueScheduler completed. processedSchedules={}, enteredMemberCount={}, elapsedMs={}",
+                processedSchedules, enteredMemberCount, elapsedMs);
     }
 }

@@ -2,7 +2,7 @@ package com.ticketing.application.seat.service;
 
 import com.ticketing.api.seat.dto.SeatCreateRequest;
 import com.ticketing.api.seat.dto.SeatResponse;
-import com.ticketing.infrastructure.seat.mapper.SeatMapper;
+import com.ticketing.infrastructure.persistence.seat.mapper.SeatMapper;
 import com.ticketing.domain.seat.model.Seat;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

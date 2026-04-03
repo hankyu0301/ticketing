@@ -2,7 +2,7 @@ package com.ticketing.application.reservation.service;
 
 import com.ticketing.domain.reservation.model.Reservation;
 import com.ticketing.infrastructure.persistence.reservation.ReservationMapper;
-import com.ticketing.infrastructure.seat.mapper.SeatMapper;
+import com.ticketing.infrastructure.persistence.seat.mapper.SeatMapper;
 import com.ticketing.domain.seat.model.Seat;
 import com.ticketing.domain.seat.exception.SeatNotFoundException;
 import lombok.RequiredArgsConstructor;

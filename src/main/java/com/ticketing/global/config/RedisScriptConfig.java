@@ -29,4 +29,9 @@ public class RedisScriptConfig {
     public RedisScript<Long> validExtensionScript() {
         return RedisScript.of(new ClassPathResource("scripts/queue_valid_extension.lua"), Long.class);
     }
+
+    @Bean
+    public RedisScript<Long> cleanupProcessingScheduleScript() {
+        return RedisScript.of(new ClassPathResource("scripts/queue_cleanup_processing_schedule.lua"), Long.class);
+    }
 }

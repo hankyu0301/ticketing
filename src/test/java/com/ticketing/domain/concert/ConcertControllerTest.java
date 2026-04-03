@@ -49,7 +49,7 @@ class ConcertControllerTest {
 
     @Test
     @DisplayName("[SUCCESS] 콘서트 생성 성공 - 201 Created")
-    @WithMockUser
+    @WithMockUser(roles = "ADMIN")
     void createConcert_success() throws Exception {
         // given
         ConcertCreateRequest request = new ConcertCreateRequest();
@@ -70,7 +70,7 @@ class ConcertControllerTest {
 
     @Test
     @DisplayName("[FAIL] 콘서트 생성 실패 - title 누락 (400 Bad Request)")
-    @WithMockUser
+    @WithMockUser(roles = "ADMIN")
     void createConcert_fail_null_title() throws Exception {
 
         // given
@@ -90,7 +90,7 @@ class ConcertControllerTest {
 
     @Test
     @DisplayName("[FAIL] 콘서트 생성 실패 - description 누락 (400 Bad Request)")
-    @WithMockUser
+    @WithMockUser(roles = "ADMIN")
     void createConcert_fail_null_description() throws Exception {
 
         // given
@@ -114,7 +114,7 @@ class ConcertControllerTest {
 
     @Test
     @DisplayName("[SUCCESS] 스케줄 생성 성공 - 201 Created")
-    @WithMockUser
+    @WithMockUser(roles = "ADMIN")
     void createSchedule_success() throws Exception {
         // given
         Long concertId = 1L;
@@ -137,7 +137,7 @@ class ConcertControllerTest {
 
     @Test
     @DisplayName("[FAIL] 스케줄 생성 실패 - 존재하지 않는 콘서트 (404 Not Found)")
-    @WithMockUser
+    @WithMockUser(roles = "ADMIN")
     void createSchedule_fail_concertNotFound() throws Exception {
         // given
         Long invalidConcertId = 999L;
@@ -162,7 +162,7 @@ class ConcertControllerTest {
 
     @Test
     @DisplayName("[FAIL] 스케줄 생성 실패 - concertDate 누락 (400 Bad Request)")
-    @WithMockUser
+    @WithMockUser(roles = "ADMIN")
     void createSchedule_fail_null_concertDate() throws Exception {
 
         // given
@@ -186,7 +186,7 @@ class ConcertControllerTest {
 
     @Test
     @DisplayName("[FAIL] 스케줄 생성 실패 - reservationOpenAt 누락 (400 Bad Request)")
-    @WithMockUser
+    @WithMockUser(roles = "ADMIN")
     void createSchedule_fail_null_reservationOpenAt() throws Exception {
 
         // given
@@ -210,7 +210,7 @@ class ConcertControllerTest {
 
     @Test
     @DisplayName("[FAIL] 스케줄 생성 실패 - totalSeats 누락 (400 Bad Request)")
-    @WithMockUser
+    @WithMockUser(roles = "ADMIN")
     void createSchedule_fail_null_totalSeats() throws Exception {
 
         // given

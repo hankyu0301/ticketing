@@ -24,6 +24,12 @@ public class CustomUserDetailsService implements UserDetailsService {
         Member member = memberMapper.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException(NOT_EXIST_MEMBER));
         SessionMember sessionMember = SessionMember.create(member.getMemberId(), member.getEmail(), member.getNickname());
-        return new CustomUserDetails(sessionMember, member.getPassword(), Collections.singleton(new SimpleGrantedAuthority("ROLE_USER")));
+        String role = member.getRole() == null ? Member.DEFAULT_ROLE : member.getRole();
+        String authority = role.startsWith("ROLE_") ? role : "ROLE_" + role;
+        return new CustomUserDetails(
+                sessionMember,
+                member.getPassword(),
+                Collections.singleton(new SimpleGrantedAuthority(authority))
+        );
     }
 }
