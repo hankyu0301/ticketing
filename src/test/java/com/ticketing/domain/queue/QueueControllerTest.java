@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketing.api.queue.controller.QueueController;
 import com.ticketing.api.queue.dto.QueueResponse;
 import com.ticketing.application.queue.service.QueueService;
+import com.ticketing.global.common.exception.queue.QueueBadRequestException;
 import com.ticketing.global.common.exception.queue.QueueErrorMessage;
 import com.ticketing.global.common.exception.queue.QueueNotFoundException;
 import com.ticketing.global.security.service.CustomUserDetails;
@@ -43,7 +44,6 @@ class QueueControllerTest {
     @MockitoBean
     QueueService queueService;
 
-    // 인증 객체 Mocking
     @BeforeEach
     void setup() {
         CustomUserDetails mockUser = mock(CustomUserDetails.class);
@@ -58,20 +58,17 @@ class QueueControllerTest {
     }
 
     @Test
-    @DisplayName("[SUCCESS] 대기열 진입 요청, 대기열 X 활성열 입장 - 200 OK")
+    @DisplayName("[SUCCESS] 대기열 진입 - 즉시 입장")
     void enterQueue_activeMember_success() throws Exception {
-        // given
         Long scheduleId = 100L;
         QueueResponse mockResponse = new QueueResponse(0L, 0L, true);
         given(queueService.enterQueue(anyLong(), anyLong())).willReturn(mockResponse);
 
-        // when
         ResultActions result = mockMvc.perform(post("/api/v1/queue/enter")
                 .param("scheduleId", String.valueOf(scheduleId))
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON));
 
-        // then
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.rank").value(0L))
                 .andExpect(jsonPath("$.data.entered").value(true))
@@ -79,20 +76,17 @@ class QueueControllerTest {
     }
 
     @Test
-    @DisplayName("[SUCCESS] 대기열 진입 요청, 대기열 진입 - 200 OK")
+    @DisplayName("[SUCCESS] 대기열 진입 - waiting")
     void enterQueue_success() throws Exception {
-        // given
         Long scheduleId = 100L;
-        QueueResponse mockResponse = new QueueResponse(10L, 5L, false); // 10등, 5초 대기
+        QueueResponse mockResponse = new QueueResponse(10L, 5L, false);
         given(queueService.enterQueue(anyLong(), anyLong())).willReturn(mockResponse);
 
-        // when
         ResultActions result = mockMvc.perform(post("/api/v1/queue/enter")
                 .param("scheduleId", String.valueOf(scheduleId))
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON));
 
-        // then
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.rank").value(10L))
                 .andExpect(jsonPath("$.data.entered").value(false))
@@ -100,20 +94,32 @@ class QueueControllerTest {
     }
 
     @Test
-    @DisplayName("[SUCCESS] 대기열 순번 조회 (대기중) - 200 OK")
-    void getRank_success_waiting() throws Exception {
-        // given
+    @DisplayName("[FAIL] 대기열 진입 실패 - 예매 오픈 전")
+    void enterQueue_fail_beforeReservationOpen() throws Exception {
         Long scheduleId = 100L;
-        QueueResponse mockResponse = new QueueResponse(10L, 5L, false); // 10등, 5초 대기
+        given(queueService.enterQueue(anyLong(), anyLong()))
+                .willThrow(new QueueBadRequestException(QueueErrorMessage.RESERVATION_NOT_OPEN));
 
+        ResultActions result = mockMvc.perform(post("/api/v1/queue/enter")
+                .param("scheduleId", String.valueOf(scheduleId))
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON));
+
+        result.andExpect(status().isBadRequest())
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("[SUCCESS] 상태 조회 - waiting")
+    void getRank_success_waiting() throws Exception {
+        Long scheduleId = 100L;
+        QueueResponse mockResponse = new QueueResponse(10L, 5L, false);
         given(queueService.getQueueStatus(anyLong(), anyLong())).willReturn(mockResponse);
 
-        // when
         ResultActions result = mockMvc.perform(get("/api/v1/queue/rank")
                 .param("scheduleId", String.valueOf(scheduleId))
                 .contentType(MediaType.APPLICATION_JSON));
 
-        // then
         result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.rank").value(10L))
                 .andExpect(jsonPath("$.data.entered").value(false))
@@ -121,20 +127,17 @@ class QueueControllerTest {
     }
 
     @Test
-    @DisplayName("[FAIL] 대기열 조회 실패 - 대기열 없음 (404 Not Found)")
+    @DisplayName("[FAIL] 상태 조회 실패 - queue 없음")
     void getRank_fail_notFound() throws Exception {
-        // given
         Long scheduleId = 999L;
         given(queueService.getQueueStatus(anyLong(), anyLong()))
                 .willThrow(new QueueNotFoundException(QueueErrorMessage.NOT_EXIST_QUEUE));
 
-        // when
         ResultActions result = mockMvc.perform(get("/api/v1/queue/rank")
                 .param("scheduleId", String.valueOf(scheduleId))
                 .contentType(MediaType.APPLICATION_JSON));
 
-        // then
-        result.andExpect(status().isNotFound()) // GlobalExceptionHandler 매핑 가정
+        result.andExpect(status().isNotFound())
                 .andDo(print());
     }
 }

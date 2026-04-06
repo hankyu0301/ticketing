@@ -2,6 +2,7 @@ package com.ticketing.api.concert.controller;
 
 import com.ticketing.domain.concert.exception.ConcertBadRequestException;
 import com.ticketing.domain.concert.exception.ConcertNotFoundException;
+import com.ticketing.domain.concert.exception.ConcertScheduleNotFoundException;
 import com.ticketing.global.common.response.ResponseDTO;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -16,8 +17,8 @@ import static com.ticketing.global.common.exception.GlobalExceptionHandler.HTTP_
 @RestControllerAdvice
 public class ConcertExceptionHandler {
 
-    @ExceptionHandler(ConcertNotFoundException.class)
-    public ResponseEntity<ResponseDTO<String>> concertNotFountException(ConcertNotFoundException ex, HttpServletRequest request) {
+    @ExceptionHandler({ConcertNotFoundException.class, ConcertScheduleNotFoundException.class})
+    public ResponseEntity<ResponseDTO<String>> concertNotFoundException(RuntimeException ex, HttpServletRequest request) {
         log.info(HTTP_REQUEST, request.getMethod(), request.getRequestURI(),
                 ex.getMessage(), HttpStatus.NOT_FOUND);
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ResponseDTO.getFailResult(ex.getMessage()));

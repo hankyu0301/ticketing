@@ -28,6 +28,9 @@ public class QueueRedisRepository {
     @Value("${queue.safety-ttl-days:7}")
     private long safetyTtlDays;
 
+    @Value("${queue.active-time-ms:300000}")
+    private long activeTimeMs;
+
     public Long register(Long scheduleId, Long memberId, long maxActive, long activeTimeMs) {
         String waitKey = getWaitKey(scheduleId);
         String activeKey = getActiveKey(scheduleId);
@@ -68,7 +71,7 @@ public class QueueRedisRepository {
     public boolean validateAndExtendActiveMember(Long scheduleId, Long memberId) {
         String activeKey = getActiveKey(scheduleId);
         long currentTime = System.currentTimeMillis();
-        long newExpireAt = currentTime + (5 * 60 * 1000);
+        long newExpireAt = currentTime + activeTimeMs;
 
         Long result = redisTemplate.execute(
                 validExtensionScript,

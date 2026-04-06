@@ -14,8 +14,15 @@ import static com.ticketing.global.common.exception.GlobalExceptionHandler.HTTP_
 @RestControllerAdvice
 public class QueueExceptionHandler {
 
+    @ExceptionHandler(QueueBadRequestException.class)
+    public ResponseEntity<ResponseDTO<String>> badRequestException(QueueBadRequestException ex, HttpServletRequest request) {
+        log.info(HTTP_REQUEST, request.getMethod(), request.getRequestURI(),
+                ex.getMessage(), HttpStatus.BAD_REQUEST);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ResponseDTO.getFailResult(ex.getMessage()));
+    }
+
     @ExceptionHandler(QueueNotFoundException.class)
-    public ResponseEntity<ResponseDTO<String>> notFountException(QueueNotFoundException ex, HttpServletRequest request) {
+    public ResponseEntity<ResponseDTO<String>> notFoundException(QueueNotFoundException ex, HttpServletRequest request) {
         log.info(HTTP_REQUEST, request.getMethod(), request.getRequestURI(),
                 ex.getMessage(), HttpStatus.NOT_FOUND);
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ResponseDTO.getFailResult(ex.getMessage()));
