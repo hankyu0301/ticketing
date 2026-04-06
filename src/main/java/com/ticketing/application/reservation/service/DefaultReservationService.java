@@ -1,6 +1,7 @@
 package com.ticketing.application.reservation.service;
 
 import com.ticketing.api.reservation.dto.ReservationResponse;
+import com.ticketing.domain.reservation.exception.ReservationBadRequestException;
 import com.ticketing.infrastructure.persistence.reservation.ReservationMapper;
 import com.ticketing.domain.reservation.model.Reservation;
 import com.ticketing.infrastructure.persistence.seat.mapper.SeatMapper;
@@ -13,7 +14,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Objects;
 
+import static com.ticketing.domain.reservation.exception.ReservationErrorMessage.SEAT_NOT_BELONG_TO_SCHEDULE;
 import static com.ticketing.domain.seat.exception.SeatErrorMessage.NOT_EXIST_SEAT;
 
 @Service
@@ -29,6 +32,7 @@ public class DefaultReservationService {
         // 1, 2
         Seat seat = seatMapper.findById(seatId)
                 .orElseThrow(() -> new SeatNotFoundException(NOT_EXIST_SEAT));
+        validateSeatSchedule(seat, scheduleId);
         seat.reserve(memberId);
         seatMapper.update(seat);
 
@@ -44,5 +48,11 @@ public class DefaultReservationService {
         reservationMapper.save(reservation);
 
         return new ReservationResponse(reservation);
+    }
+
+    private void validateSeatSchedule(Seat seat, Long scheduleId) {
+        if (!Objects.equals(seat.getScheduleId(), scheduleId)) {
+            throw new ReservationBadRequestException(SEAT_NOT_BELONG_TO_SCHEDULE);
+        }
     }
 }
