@@ -4,8 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketing.api.reservation.controller.ReservationController;
 import com.ticketing.api.reservation.dto.ReservationCreateRequest;
 import com.ticketing.api.reservation.dto.ReservationResponse;
-import com.ticketing.domain.reservation.model.Reservation;
 import com.ticketing.application.reservation.service.ReservationService;
+import com.ticketing.domain.reservation.exception.ReservationBadRequestException;
+import com.ticketing.domain.reservation.exception.ReservationErrorMessage;
+import com.ticketing.domain.reservation.model.Reservation;
 import com.ticketing.global.security.service.CustomUserDetails;
 import com.ticketing.global.security.service.SessionMember;
 import org.junit.jupiter.api.DisplayName;
@@ -32,6 +34,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -100,6 +103,7 @@ public class ReservationControllerTest {
         // then
         resultActions
                 .andExpect(status().isBadRequest())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(ReservationErrorMessage.SCHEDULE_ID_NOT_EMPTY)))
                 .andDo(print());
     }
 
@@ -120,6 +124,39 @@ public class ReservationControllerTest {
         // then
         resultActions
                 .andExpect(status().isBadRequest())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(ReservationErrorMessage.SEAT_ID_MUST_NOT_EMPTY)))
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("예약 실패 테스트 - 요청 회차와 좌석 회차 불일치")
+    void create_fail_scheduleSeatMismatch() throws Exception {
+        ReservationCreateRequest request = new ReservationCreateRequest();
+        ReflectionTestUtils.setField(request, "scheduleId", 1L);
+        ReflectionTestUtils.setField(request, "seatId", 1L);
+
+        Long memberId = 1L;
+        CustomUserDetails mockPrincipal = org.mockito.Mockito.mock(CustomUserDetails.class);
+        SessionMember mockSessionMember = org.mockito.Mockito.mock(SessionMember.class);
+
+        given(mockPrincipal.getSessionMember()).willReturn(mockSessionMember);
+        given(mockSessionMember.getMemberId()).willReturn(memberId);
+        given(mockPrincipal.getAuthorities()).willReturn(Collections.emptyList());
+
+        Authentication auth = new UsernamePasswordAuthenticationToken(mockPrincipal, null, mockPrincipal.getAuthorities());
+
+        given(reservationService.reserve(anyLong(), any(ReservationCreateRequest.class)))
+                .willThrow(new ReservationBadRequestException(ReservationErrorMessage.SEAT_NOT_BELONG_TO_SCHEDULE));
+
+        ResultActions resultActions = mockMvc.perform(post("/api/v1/reservations")
+                .with(csrf())
+                .with(authentication(auth))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)));
+
+        resultActions
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(ReservationErrorMessage.SEAT_NOT_BELONG_TO_SCHEDULE)))
                 .andDo(print());
     }
 
