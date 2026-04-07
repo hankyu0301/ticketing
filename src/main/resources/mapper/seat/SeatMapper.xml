@@ -12,6 +12,12 @@
         </foreach>
     </insert>
 
+    <select id="countByScheduleId" resultType="long">
+        SELECT COUNT(*)
+        FROM seats
+        WHERE schedule_id = #{scheduleId}
+    </select>
+
     <select id="findAllByScheduleId" resultType="Seat">
         SELECT seat_id, schedule_id, seat_no, grade, price, member_Id, status, updated_at, created_at
         FROM seats

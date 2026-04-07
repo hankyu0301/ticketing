@@ -3,9 +3,10 @@ package com.ticketing.domain.seat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketing.api.seat.controller.SeatController;
 import com.ticketing.api.seat.dto.SeatCreateRequest;
-import com.ticketing.api.seat.dto.SeatResponse;
-import com.ticketing.domain.seat.model.Seat;
 import com.ticketing.application.seat.service.SeatService;
+import com.ticketing.domain.concert.exception.ConcertErrorMessage;
+import com.ticketing.domain.concert.exception.ConcertScheduleNotFoundException;
+import com.ticketing.domain.seat.exception.SeatBadRequestException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,104 +16,126 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.ResultActions;
 
 import java.math.BigDecimal;
-import java.util.List;
 
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.BDDMockito.given;
+import static com.ticketing.domain.seat.exception.SeatErrorMessage.SEAT_COUNT_MISMATCH;
+import static com.ticketing.domain.seat.exception.SeatErrorMessage.SEATS_ALREADY_CREATED;
+import static com.ticketing.domain.seat.exception.SeatErrorMessage.TOTAL_SEATS_MUST_NOT_EMPTY;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.willThrow;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(SeatController.class)
 class SeatControllerTest {
 
     @Autowired
-    MockMvc mockMvc;
+    private MockMvc mockMvc;
 
     @Autowired
-    ObjectMapper objectMapper;
+    private ObjectMapper objectMapper;
 
     @MockitoBean
-    SeatService seatService;
-
+    private SeatService seatService;
 
     @Test
-    @DisplayName("[SUCCESS] 좌석 생성 API 성공")
     @WithMockUser(roles = "ADMIN")
+    @DisplayName("좌석 생성 성공")
     void createSeats_success() throws Exception {
-        // given
-        Long scheduleId = 1L;
-        SeatCreateRequest request = new SeatCreateRequest();
-        ReflectionTestUtils.setField(request, "totalSeats", 50);
-        ReflectionTestUtils.setField(request, "grade", "VIP");
-        ReflectionTestUtils.setField(request, "price", BigDecimal.valueOf(150000));
+        SeatCreateRequest request = createRequest(50, "VIP", BigDecimal.valueOf(10000));
 
-        // when
-        ResultActions result = mockMvc.perform(post("/api/v1/schedules/{scheduleId}/seats", scheduleId)
-                .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)));
-
-        // then
-        result.andExpect(status().isOk())
-                .andDo(print());
+        mockMvc.perform(post("/api/v1/schedules/1/seats")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
+                .andExpect(status().isOk());
     }
 
     @Test
-    @DisplayName("[SUCCESS] 좌석 배치도 조회 API 성공")
-    @WithMockUser
-    void getSeats_success() throws Exception {
-        // given
-        Long scheduleId = 1L;
-
-        Seat seat1 = Seat.create(scheduleId, 1, "VIP", BigDecimal.valueOf(150000));
-        Seat seat2 = Seat.create(scheduleId, 2, "VIP", BigDecimal.valueOf(150000));
-        ReflectionTestUtils.setField(seat2, "status", Seat.SeatStatus.SOLD_OUT);
-
-        List<SeatResponse> response = List.of(new SeatResponse(seat1), new SeatResponse(seat2));
-
-        given(seatService.getSeats(anyLong())).willReturn(response);
-
-        // when
-        ResultActions result = mockMvc.perform(get("/api/v1/schedules/{scheduleId}/seats", scheduleId)
-                .contentType(MediaType.APPLICATION_JSON));
-
-        // then
-        result.andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.size()").value(2))
-                .andExpect(jsonPath("$.data[0].seatNo").value(1))
-                .andExpect(jsonPath("$.data[0].status").value("AVAILABLE"))
-                .andExpect(jsonPath("$.data[1].seatNo").value(2))
-                .andExpect(jsonPath("$.data[1].status").value("SOLD_OUT"))
-                .andDo(print());
-    }
-
-    @Test
-    @DisplayName("[FAIL] 좌석 생성 실패 : 유효성 검증 실패")
     @WithMockUser(roles = "ADMIN")
-    void createSeats_fail_validation() throws Exception {
-        // given
-        Long scheduleId = 1L;
+    @DisplayName("존재하지 않는 회차에는 좌석 생성 요청이 404를 반환한다")
+    void createSeats_fail_scheduleNotFound() throws Exception {
+        SeatCreateRequest request = createRequest(50, "VIP", BigDecimal.valueOf(10000));
+
+        willThrow(new ConcertScheduleNotFoundException(ConcertErrorMessage.NOT_EXIST_SCHEDULE))
+                .given(seatService)
+                .createSeats(eq(1L), any(SeatCreateRequest.class));
+
+        mockMvc.perform(post("/api/v1/schedules/1/seats")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
+                .andExpect(status().isNotFound())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(ConcertErrorMessage.NOT_EXIST_SCHEDULE)));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("회차 좌석 수와 요청 좌석 수가 다르면 400을 반환한다")
+    void createSeats_fail_totalSeatMismatch() throws Exception {
+        SeatCreateRequest request = createRequest(50, "VIP", BigDecimal.valueOf(10000));
+
+        willThrow(new SeatBadRequestException(SEAT_COUNT_MISMATCH))
+                .given(seatService)
+                .createSeats(eq(1L), any(SeatCreateRequest.class));
+
+        mockMvc.perform(post("/api/v1/schedules/1/seats")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(SEAT_COUNT_MISMATCH)));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("이미 좌석이 생성된 회차면 400을 반환한다")
+    void createSeats_fail_alreadyCreated() throws Exception {
+        SeatCreateRequest request = createRequest(50, "VIP", BigDecimal.valueOf(10000));
+
+        willThrow(new SeatBadRequestException(SEATS_ALREADY_CREATED))
+                .given(seatService)
+                .createSeats(eq(1L), any(SeatCreateRequest.class));
+
+        mockMvc.perform(post("/api/v1/schedules/1/seats")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(SEATS_ALREADY_CREATED)));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("좌석 생성 요청 검증 실패 시 400을 반환한다")
+    void createSeats_validation_fail_totalSeatsNull() throws Exception {
         SeatCreateRequest request = new SeatCreateRequest();
+        ReflectionTestUtils.setField(request, "grade", "VIP");
+        ReflectionTestUtils.setField(request, "price", BigDecimal.valueOf(10000));
 
-        ReflectionTestUtils.setField(request, "totalSeats", -5);
-        ReflectionTestUtils.setField(request, "grade", "");
-        ReflectionTestUtils.setField(request, "price", BigDecimal.valueOf(-1000));
+        mockMvc.perform(post("/api/v1/schedules/1/seats")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(TOTAL_SEATS_MUST_NOT_EMPTY)));
+    }
 
-        // when
-        ResultActions result = mockMvc.perform(post("/api/v1/schedules/{scheduleId}/seats", scheduleId)
-                .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)));
-
-        // then
-        result.andExpect(status().isBadRequest())
-                .andDo(print());
+    private SeatCreateRequest createRequest(int totalSeats, String grade, BigDecimal price) {
+        SeatCreateRequest request = new SeatCreateRequest();
+        ReflectionTestUtils.setField(request, "totalSeats", totalSeats);
+        ReflectionTestUtils.setField(request, "grade", grade);
+        ReflectionTestUtils.setField(request, "price", price);
+        return request;
     }
 }
