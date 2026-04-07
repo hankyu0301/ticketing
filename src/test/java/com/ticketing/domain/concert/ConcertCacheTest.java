@@ -88,6 +88,7 @@ class ConcertCacheTest {
         ConcertSchedule schedule = ConcertSchedule.create(concertId, LocalDateTime.now(), LocalDateTime.now(), 50);
         ReflectionTestUtils.setField(schedule, "scheduleId", 100L);
 
+        given(concertMapper.existsById(concertId)).willReturn(true);
         given(concertScheduleMapper.findAllByConcertId(concertId))
                 .willReturn(List.of(schedule));
 
@@ -105,13 +106,11 @@ class ConcertCacheTest {
     @Test
     @DisplayName("스케줄 생성 시 캐시 무효화: 생성 후 다시 조회하면 DB를 호출해야 한다")
     void createSchedule_cache_evict() {
-        // given
         Long concertId = 1L;
 
-        // 스케줄 생성 요청 객체 세팅
         ConcertScheduleCreateRequest request = new ConcertScheduleCreateRequest();
         ReflectionTestUtils.setField(request, "concertDate", LocalDateTime.now().plusDays(1));
-        ReflectionTestUtils.setField(request, "reservationOpenAt", LocalDateTime.now());
+        ReflectionTestUtils.setField(request, "reservationOpenAt", LocalDateTime.now().plusHours(1));
         ReflectionTestUtils.setField(request, "totalSeats", 100);
 
         given(concertMapper.existsById(concertId)).willReturn(true);

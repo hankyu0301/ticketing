@@ -4,6 +4,7 @@ import com.ticketing.api.concert.dto.ConcertCreateRequest;
 import com.ticketing.api.concert.dto.ConcertDto;
 import com.ticketing.api.concert.dto.ConcertScheduleCreateRequest;
 import com.ticketing.api.concert.dto.ConcertScheduleDto;
+import com.ticketing.domain.concert.exception.ConcertBadRequestException;
 import com.ticketing.infrastructure.persistence.concert.ConcertMapper;
 import com.ticketing.infrastructure.persistence.concert.ConcertScheduleMapper;
 import com.ticketing.domain.concert.model.Concert;
@@ -16,6 +17,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -36,12 +38,14 @@ public class ConcertService {
 
     // 스케줄 생성
     @Transactional
-    @CacheEvict(value = "schedules", key = "#concertId")
+    @CacheEvict(value = "schedules", key = "#concertId", cacheManager = "redisCacheManager")
     public Long createSchedule(Long concertId, ConcertScheduleCreateRequest request) {
         // 콘서트 존재 여부 확인
         if (!concertMapper.existsById(concertId)) {
             throw new ConcertNotFoundException(ConcertErrorMessage.NOT_EXIST_CONCERT);
         }
+
+        validateScheduleRequest(request);
 
         ConcertSchedule schedule = request.toEntity(concertId);
         concertScheduleMapper.insertSchedule(schedule);
@@ -61,7 +65,27 @@ public class ConcertService {
     @Transactional(readOnly = true)
     @Cacheable(value = "schedules", key = "#concertId", cacheManager = "redisCacheManager")
     public List<ConcertScheduleDto> getSchedules(Long concertId) {
+        if (!concertMapper.existsById(concertId)) {
+            throw new ConcertNotFoundException(ConcertErrorMessage.NOT_EXIST_CONCERT);
+        }
+
         return concertScheduleMapper.findAllByConcertId(concertId)
                 .stream().map(ConcertScheduleDto::new).collect(Collectors.toList());
+    }
+
+    private void validateScheduleRequest(ConcertScheduleCreateRequest request) {
+        LocalDateTime now = LocalDateTime.now();
+
+        if (request.getReservationOpenAt().isBefore(now)) {
+            throw new ConcertBadRequestException(
+                    ConcertErrorMessage.RESERVATION_OPEN_AT_MUST_BE_FUTURE
+            );
+        }
+
+        if (!request.getReservationOpenAt().isBefore(request.getConcertDate())) {
+            throw new ConcertBadRequestException(
+                    ConcertErrorMessage.RESERVATION_OPEN_AT_MUST_BE_BEFORE_CONCERT_DATE
+            );
+        }
     }
 }
