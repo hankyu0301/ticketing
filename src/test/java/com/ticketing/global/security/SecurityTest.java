@@ -67,6 +67,7 @@ public class SecurityTest {
                 .andDo(print())
                 .andExpect(status().isOk());
     }
+
     @Test
     @DisplayName("[SUCCESS] 회원 권한으로 홈 접근")
     @WithMockUser(authorities = "USER")
@@ -86,6 +87,29 @@ public class SecurityTest {
                 .andDo(print())
                 .andExpect(authenticated())
                 .andExpect(status().is2xxSuccessful());
+    }
+
+    @Test
+    @DisplayName("[SUCCESS] 익명 사용자는 회원가입 가능")
+    @WithAnonymousUser
+    void anonymous_signup_success() throws Exception {
+        MemberSignupRequest request = new MemberSignupRequest();
+        ReflectionTestUtils.setField(request, "email", "signup@test.com");
+        ReflectionTestUtils.setField(request, "password", "password1234");
+        ReflectionTestUtils.setField(request, "nickname", "익명가입");
+
+        mockMvc.perform(post("/api/v1/members/signup")
+                        .with(csrf())
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "email": "signup@test.com",
+                                  "password": "password1234",
+                                  "nickname": "익명가입"
+                                }
+                                """))
+                .andDo(print())
+                .andExpect(status().isCreated());
     }
 
     @Test
