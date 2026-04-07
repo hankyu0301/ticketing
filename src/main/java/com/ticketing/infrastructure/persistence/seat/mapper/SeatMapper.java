@@ -11,6 +11,8 @@ public interface SeatMapper {
 
     void insertSeatsInBatch(List<Seat> seats);
 
+    long countByScheduleId(Long scheduleId);
+
     List<Seat> findAllByScheduleId(Long scheduleId);
 
     Optional<Seat> findById(Long seatId);
