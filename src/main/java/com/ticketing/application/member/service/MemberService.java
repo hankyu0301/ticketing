@@ -2,9 +2,9 @@ package com.ticketing.application.member.service;
 
 import com.ticketing.api.member.dto.MemberSignupRequest;
 import com.ticketing.api.member.dto.MemberSignupResponse;
-import com.ticketing.infrastructure.persistence.member.MemberMapper;
-import com.ticketing.domain.member.model.Member;
 import com.ticketing.domain.member.exception.MemberBadRequestException;
+import com.ticketing.domain.member.model.Member;
+import com.ticketing.infrastructure.persistence.member.MemberMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -21,13 +21,12 @@ public class MemberService {
 
     @Transactional
     public MemberSignupResponse signUp(MemberSignupRequest req) {
-
         validateEmailNotDuplicated(req.getEmail());
         String encodedPassword = passwordEncoder.encode(req.getPassword());
         Member member = req.toEntity(encodedPassword);
         memberMapper.insertMember(member);
-        return new MemberSignupResponse(member);
 
+        return new MemberSignupResponse(member);
     }
 
     private void validateEmailNotDuplicated(String email) {
