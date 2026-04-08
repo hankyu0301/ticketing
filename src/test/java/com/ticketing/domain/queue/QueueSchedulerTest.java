@@ -18,17 +18,17 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
-public class QueueSchedulerTest {
+class QueueSchedulerTest {
 
     @InjectMocks
-    QueueScheduler queueScheduler;
+    private QueueScheduler queueScheduler;
 
     @Mock
-    QueueRedisRepository queueRedisRepository;
+    private QueueRedisRepository queueRedisRepository;
 
     @Test
-    @DisplayName("[SUCCESS] 스케줄러 실행 시 입장 처리 로직 호출 확인")
-    void processQueue_success() {
+    @DisplayName("스케줄러를 실행하면 입장 처리 로직을 호출한다.")
+    void processQueueSuccess() {
         // given
         // 1. 관리 대상 스케줄이 있다고 가정해야 함
         given(queueRedisRepository.getProcessingSchedules())

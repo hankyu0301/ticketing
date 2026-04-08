@@ -28,20 +28,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
-public class SecurityTest {
+class SecurityTest {
 
     private static final String MEMBER_LOGIN_URL = "/api/v1/members/login";
     private static final String MEMBER_LOGIN_EMAIL = "test@test.com";
     private static final String MEMBER_LOGIN_PASSWORD = "password1234";
 
     @Autowired
-    MockMvc mockMvc;
+    private MockMvc mockMvc;
 
     @Autowired
-    WebApplicationContext context;
+    private WebApplicationContext context;
 
     @Autowired
-    MemberService memberService;
+    private MemberService memberService;
 
     @BeforeEach
     void beforeEach() {
@@ -60,26 +60,26 @@ public class SecurityTest {
     }
 
     @Test
-    @DisplayName("[SUCCESS] 비회원 권한으로 홈 접근")
+    @DisplayName("비회원은 홈에 접근할 수 있다.")
     @WithAnonymousUser
-    void anonymous_authorization_home() throws Exception {
+    void anonymousAuthorizationHome() throws Exception {
         mockMvc.perform(get("/"))
                 .andDo(print())
                 .andExpect(status().isOk());
     }
 
     @Test
-    @DisplayName("[SUCCESS] 회원 권한으로 홈 접근")
+    @DisplayName("회원은 홈에 접근할 수 있다.")
     @WithMockUser(authorities = "USER")
-    void authentication_member() throws Exception {
+    void authenticationMember() throws Exception {
         mockMvc.perform(get("/"))
                 .andDo(print())
                 .andExpect(status().isOk());
     }
 
     @Test
-    @DisplayName("[SUCCESS] 로그인 성공")
-    void login_success() throws Exception {
+    @DisplayName("로그인에 성공한다.")
+    void loginSuccess() throws Exception {
         mockMvc.perform(post(MEMBER_LOGIN_URL)
                         .with(csrf())
                         .param("email", MEMBER_LOGIN_EMAIL)
@@ -90,9 +90,9 @@ public class SecurityTest {
     }
 
     @Test
-    @DisplayName("[SUCCESS] 익명 사용자는 회원가입 가능")
+    @DisplayName("익명 사용자는 회원가입할 수 있다.")
     @WithAnonymousUser
-    void anonymous_signup_success() throws Exception {
+    void anonymousSignupSuccess() throws Exception {
         MemberSignupRequest request = new MemberSignupRequest();
         ReflectionTestUtils.setField(request, "email", "signup@test.com");
         ReflectionTestUtils.setField(request, "password", "password1234");
@@ -113,16 +113,16 @@ public class SecurityTest {
     }
 
     @Test
-    @DisplayName("[ERROR] 접근 권한 없음 : USER가 ADMIN 권한으로 접근")
+    @DisplayName("USER 권한으로는 ADMIN 경로에 접근할 수 없다.")
     @WithMockUser(authorities="USER")
-    void endpoint_with_user_authority_authorized() throws Exception {
+    void endpointWithUserAuthorityAuthorized() throws Exception {
         mockMvc.perform(get("/admin"))
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    @DisplayName("[ERROR] 로그인 실패 : 비밀번호 불일치")
-    public void login_fail_with_wrong_pwsd() throws Exception {
+    @DisplayName("비밀번호가 일치하지 않으면 로그인에 실패한다.")
+    void loginFailWithWrongPwsd() throws Exception {
         String invalidPassword = "ab";
         mockMvc.perform(post(MEMBER_LOGIN_URL)
                         .with(csrf())
@@ -134,8 +134,8 @@ public class SecurityTest {
     }
 
     @Test
-    @DisplayName("[ERROR] 로그인 실패 : 존재하지 않는 유저")
-    void login_fail_not_exist() throws Exception{
+    @DisplayName("존재하지 않는 유저로 로그인하면 실패한다.")
+    void loginFailNotExist() throws Exception{
         String invalidEmail = "존재하지 않는 유저";
         mockMvc.perform(post(MEMBER_LOGIN_URL)
                         .with(csrf())
@@ -147,7 +147,7 @@ public class SecurityTest {
     }
 
     @Test
-    @DisplayName("[SUCCESS] 로그아웃")
+    @DisplayName("로그아웃에 성공한다.")
     void logout() throws Exception{
         mockMvc.perform(post("/api/v1/members/logout").with(csrf()))
                 .andDo(print())

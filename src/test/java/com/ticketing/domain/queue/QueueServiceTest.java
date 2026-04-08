@@ -32,13 +32,13 @@ import static org.mockito.BDDMockito.given;
 class QueueServiceTest {
 
     @InjectMocks
-    QueueService queueService;
+    private QueueService queueService;
 
     @Mock
-    QueueRedisRepository queueRedisRepository;
+    private QueueRedisRepository queueRedisRepository;
 
     @Mock
-    ConcertScheduleMapper concertScheduleMapper;
+    private ConcertScheduleMapper concertScheduleMapper;
 
     @BeforeEach
     void setUp() {
@@ -51,8 +51,8 @@ class QueueServiceTest {
     }
 
     @Test
-    @DisplayName("[SUCCESS] 대기열 진입 - 즉시 입장")
-    void enterQueue_freePass() {
+    @DisplayName("대기열에 즉시 입장하면 entered=true를 반환한다.")
+    void enterQueueFreePass() {
         given(queueRedisRepository.register(anyLong(), anyLong(), anyLong(), anyLong()))
                 .willReturn(-100L);
 
@@ -63,8 +63,8 @@ class QueueServiceTest {
     }
 
     @Test
-    @DisplayName("[SUCCESS] 대기열 진입 - 대기열 등록")
-    void enterQueue_waiting() {
+    @DisplayName("대기열에 등록되면 순번과 재시도 시간을 반환한다.")
+    void enterQueueWaiting() {
         given(queueRedisRepository.register(anyLong(), anyLong(), anyLong(), anyLong()))
                 .willReturn(4L);
 
@@ -75,8 +75,8 @@ class QueueServiceTest {
     }
 
     @Test
-    @DisplayName("[FAIL] 대기열 진입 실패 - 존재하지 않는 회차")
-    void enterQueue_fail_scheduleNotFound() {
+    @DisplayName("존재하지 않는 회차에는 대기열에 진입할 수 없다.")
+    void enterQueueFailScheduleNotFound() {
         given(concertScheduleMapper.findById(anyLong())).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> queueService.enterQueue(999L, 1L))
@@ -85,8 +85,8 @@ class QueueServiceTest {
     }
 
     @Test
-    @DisplayName("[FAIL] 대기열 진입 실패 - 예매 오픈 전")
-    void enterQueue_fail_beforeReservationOpen() {
+    @DisplayName("예매 오픈 전에는 대기열에 진입할 수 없다.")
+    void enterQueueFailBeforeReservationOpen() {
         given(concertScheduleMapper.findById(anyLong()))
                 .willReturn(Optional.of(notOpenedSchedule()));
 
@@ -96,8 +96,8 @@ class QueueServiceTest {
     }
 
     @Test
-    @DisplayName("[FAIL] 대기열 진입 실패 - Redis 결과 오류")
-    void enterQueue_fail_error() {
+    @DisplayName("Redis 결과가 비정상이면 대기열 진입에 실패한다.")
+    void enterQueueFailError() {
         given(queueRedisRepository.register(anyLong(), anyLong(), anyLong(), anyLong()))
                 .willReturn(-1L);
 
@@ -107,8 +107,8 @@ class QueueServiceTest {
     }
 
     @Test
-    @DisplayName("[SUCCESS] 상태 조회 - active 사용자")
-    void getQueueStatus_active() {
+    @DisplayName("active 사용자의 상태를 조회하면 entered=true를 반환한다.")
+    void getQueueStatusActive() {
         given(queueRedisRepository.getRank(anyLong(), anyLong()))
                 .willReturn(-100L);
 
@@ -119,8 +119,8 @@ class QueueServiceTest {
     }
 
     @Test
-    @DisplayName("[SUCCESS] 상태 조회 - waiting 사용자")
-    void getQueueStatus_waiting() {
+    @DisplayName("waiting 사용자의 상태를 조회하면 순번과 재시도 시간을 반환한다.")
+    void getQueueStatusWaiting() {
         given(queueRedisRepository.getRank(anyLong(), anyLong()))
                 .willReturn(49L);
 
@@ -132,8 +132,8 @@ class QueueServiceTest {
     }
 
     @Test
-    @DisplayName("[SUCCESS] 상태 조회 - 대기 시간 상한 적용")
-    void getQueueStatus_waiting_maxRetryTime() {
+    @DisplayName("대기 시간이 상한을 넘으면 60초로 제한한다.")
+    void getQueueStatusWaitingMaxRetryTime() {
         given(queueRedisRepository.getRank(anyLong(), anyLong()))
                 .willReturn(4999L);
 
@@ -143,8 +143,8 @@ class QueueServiceTest {
     }
 
     @Test
-    @DisplayName("[FAIL] 상태 조회 실패 - 존재하지 않는 회차")
-    void getQueueStatus_fail_scheduleNotFound() {
+    @DisplayName("존재하지 않는 회차의 상태는 조회할 수 없다.")
+    void getQueueStatusFailScheduleNotFound() {
         given(concertScheduleMapper.findById(anyLong())).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> queueService.getQueueStatus(999L, 1L))
@@ -153,8 +153,8 @@ class QueueServiceTest {
     }
 
     @Test
-    @DisplayName("[FAIL] 상태 조회 실패 - queue 미존재")
-    void getQueueStatus_fail_notFound() {
+    @DisplayName("존재하지 않는 queue 상태는 조회할 수 없다.")
+    void getQueueStatusFailNotFound() {
         given(queueRedisRepository.getRank(anyLong(), anyLong())).willReturn(-1L);
 
         assertThatThrownBy(() -> queueService.getQueueStatus(1L, 1L))
@@ -163,8 +163,8 @@ class QueueServiceTest {
     }
 
     @Test
-    @DisplayName("[FAIL] 상태 조회 실패 - 잘못된 처리량 설정")
-    void getQueueStatus_fail_invalidEstimatedThroughput() {
+    @DisplayName("처리량 설정이 잘못되면 상태를 조회할 수 없다.")
+    void getQueueStatusFailInvalidEstimatedThroughput() {
         ReflectionTestUtils.setField(queueService, "estimatedThroughput", 0L);
         given(queueRedisRepository.getRank(anyLong(), anyLong())).willReturn(1L);
 

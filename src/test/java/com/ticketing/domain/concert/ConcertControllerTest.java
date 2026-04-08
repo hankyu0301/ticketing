@@ -36,18 +36,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ConcertControllerTest {
 
     @Autowired
-    MockMvc mockMvc;
+    private MockMvc mockMvc;
 
     @Autowired
-    ObjectMapper objectMapper;
+    private ObjectMapper objectMapper;
 
     @MockitoBean
-    ConcertService concertService;
+    private ConcertService concertService;
 
     @Test
-    @DisplayName("[SUCCESS] 콘서트 생성 성공 - 201 Created")
+    @DisplayName("콘서트를 생성하면 201 Created를 반환한다.")
     @WithMockUser(roles = "ADMIN")
-    void createConcert_success() throws Exception {
+    void createConcertSuccess() throws Exception {
         ConcertCreateRequest request = new ConcertCreateRequest();
         ReflectionTestUtils.setField(request, "title", "아이유 콘서트");
         ReflectionTestUtils.setField(request, "description", "상암 월드컵 경기장");
@@ -63,9 +63,9 @@ class ConcertControllerTest {
     }
 
     @Test
-    @DisplayName("[FAIL] 콘서트 생성 실패 - title 누락 (400 Bad Request)")
+    @DisplayName("콘서트 생성 요청에 title이 없으면 400 Bad Request를 반환한다.")
     @WithMockUser(roles = "ADMIN")
-    void createConcert_fail_null_title() throws Exception {
+    void createConcertFailNullTitle() throws Exception {
         ConcertCreateRequest request = new ConcertCreateRequest();
         ReflectionTestUtils.setField(request, "description", "설명만 있음");
 
@@ -79,9 +79,9 @@ class ConcertControllerTest {
     }
 
     @Test
-    @DisplayName("[FAIL] 콘서트 생성 실패 - description 누락 (400 Bad Request)")
+    @DisplayName("콘서트 생성 요청에 description이 없으면 400 Bad Request를 반환한다.")
     @WithMockUser(roles = "ADMIN")
-    void createConcert_fail_null_description() throws Exception {
+    void createConcertFailNullDescription() throws Exception {
         ConcertCreateRequest request = new ConcertCreateRequest();
         ReflectionTestUtils.setField(request, "title", "제목만 있음");
 
@@ -95,9 +95,9 @@ class ConcertControllerTest {
     }
 
     @Test
-    @DisplayName("[SUCCESS] 스케줄 생성 성공 - 201 Created")
+    @DisplayName("스케줄을 생성하면 201 Created를 반환한다.")
     @WithMockUser(roles = "ADMIN")
-    void createSchedule_success() throws Exception {
+    void createScheduleSuccess() throws Exception {
         Long concertId = 1L;
         ConcertScheduleCreateRequest request = new ConcertScheduleCreateRequest();
         ReflectionTestUtils.setField(request, "concertDate", LocalDateTime.now().plusDays(10));
@@ -115,9 +115,9 @@ class ConcertControllerTest {
     }
 
     @Test
-    @DisplayName("[FAIL] 스케줄 생성 실패 - 존재하지 않는 콘서트 (404 Not Found)")
+    @DisplayName("존재하지 않는 콘서트에 스케줄 생성을 요청하면 404 Not Found를 반환한다.")
     @WithMockUser(roles = "ADMIN")
-    void createSchedule_fail_concertNotFound() throws Exception {
+    void createScheduleFailConcertNotFound() throws Exception {
         Long invalidConcertId = 999L;
         ConcertScheduleCreateRequest request = new ConcertScheduleCreateRequest();
         ReflectionTestUtils.setField(request, "concertDate", LocalDateTime.now().plusDays(10));
@@ -137,9 +137,9 @@ class ConcertControllerTest {
     }
 
     @Test
-    @DisplayName("[FAIL] 스케줄 생성 실패 - concertDate 누락 (400 Bad Request)")
+    @DisplayName("스케줄 생성 요청에 concertDate가 없으면 400 Bad Request를 반환한다.")
     @WithMockUser(roles = "ADMIN")
-    void createSchedule_fail_null_concertDate() throws Exception {
+    void createScheduleFailNullConcertDate() throws Exception {
         Long concertId = 1L;
         ConcertScheduleCreateRequest request = new ConcertScheduleCreateRequest();
         ReflectionTestUtils.setField(request, "reservationOpenAt", LocalDateTime.now().plusDays(10));
@@ -157,9 +157,9 @@ class ConcertControllerTest {
     }
 
     @Test
-    @DisplayName("[FAIL] 스케줄 생성 실패 - reservationOpenAt 누락 (400 Bad Request)")
+    @DisplayName("스케줄 생성 요청에 reservationOpenAt이 없으면 400 Bad Request를 반환한다.")
     @WithMockUser(roles = "ADMIN")
-    void createSchedule_fail_null_reservationOpenAt() throws Exception {
+    void createScheduleFailNullReservationOpenAt() throws Exception {
         Long concertId = 1L;
         ConcertScheduleCreateRequest request = new ConcertScheduleCreateRequest();
         ReflectionTestUtils.setField(request, "concertDate", LocalDateTime.now().plusDays(10));
@@ -177,9 +177,9 @@ class ConcertControllerTest {
     }
 
     @Test
-    @DisplayName("[FAIL] 스케줄 생성 실패 - totalSeats 누락 (400 Bad Request)")
+    @DisplayName("스케줄 생성 요청에 totalSeats가 없으면 400 Bad Request를 반환한다.")
     @WithMockUser(roles = "ADMIN")
-    void createSchedule_fail_null_totalSeats() throws Exception {
+    void createScheduleFailNullTotalSeats() throws Exception {
         Long concertId = 1L;
         ConcertScheduleCreateRequest request = new ConcertScheduleCreateRequest();
         ReflectionTestUtils.setField(request, "concertDate", LocalDateTime.now().plusDays(10));
@@ -197,9 +197,9 @@ class ConcertControllerTest {
     }
 
     @Test
-    @DisplayName("[FAIL] 스케줄 생성 실패 - totalSeats 음수 (400 Bad Request)")
+    @DisplayName("스케줄 생성 요청의 totalSeats가 음수면 400 Bad Request를 반환한다.")
     @WithMockUser
-    void createSchedule_fail_negative_totalSeats() throws Exception {
+    void createScheduleFailNegativeTotalSeats() throws Exception {
         Long concertId = 1L;
         ConcertScheduleCreateRequest request = new ConcertScheduleCreateRequest();
         ReflectionTestUtils.setField(request, "concertDate", LocalDateTime.now().plusDays(10));
@@ -218,9 +218,9 @@ class ConcertControllerTest {
     }
 
     @Test
-    @DisplayName("[FAIL] 스케줄 생성 실패 - 예매 오픈 시간이 과거 (400 Bad Request)")
+    @DisplayName("예매 오픈 시간이 과거인 스케줄 생성을 요청하면 400 Bad Request를 반환한다.")
     @WithMockUser(roles = "ADMIN")
-    void createSchedule_fail_pastReservationOpenAt() throws Exception {
+    void createScheduleFailPastReservationOpenAt() throws Exception {
         Long concertId = 1L;
         ConcertScheduleCreateRequest request = new ConcertScheduleCreateRequest();
         ReflectionTestUtils.setField(request, "concertDate", LocalDateTime.now().plusDays(10));
@@ -240,9 +240,9 @@ class ConcertControllerTest {
     }
 
     @Test
-    @DisplayName("[FAIL] 스케줄 생성 실패 - 예매 오픈 시간은 공연 시작 전이어야 함 (400 Bad Request)")
+    @DisplayName("예매 오픈 시간이 공연 시작 이후인 스케줄 생성을 요청하면 400 Bad Request를 반환한다.")
     @WithMockUser(roles = "ADMIN")
-    void createSchedule_fail_reservationOpenAtAfterConcertDate() throws Exception {
+    void createScheduleFailReservationOpenAtAfterConcertDate() throws Exception {
         Long concertId = 1L;
         ConcertScheduleCreateRequest request = new ConcertScheduleCreateRequest();
         ReflectionTestUtils.setField(request, "concertDate", LocalDateTime.now().plusDays(10));
@@ -262,9 +262,9 @@ class ConcertControllerTest {
     }
 
     @Test
-    @DisplayName("[SUCCESS] 콘서트 상세 조회 성공 - 200 OK")
+    @DisplayName("콘서트 상세를 조회하면 200 OK를 반환한다.")
     @WithMockUser
-    void getConcert_success() throws Exception {
+    void getConcertSuccess() throws Exception {
         Long concertId = 1L;
         Concert mockConcert = Concert.create("아이유 콘서트", "설명");
         ConcertDto concertDto = new ConcertDto(mockConcert);
@@ -279,9 +279,9 @@ class ConcertControllerTest {
     }
 
     @Test
-    @DisplayName("[FAIL] 콘서트 상세 조회 실패 - 존재하지 않는 콘서트 (404 Not Found)")
+    @DisplayName("존재하지 않는 콘서트 상세를 조회하면 404 Not Found를 반환한다.")
     @WithMockUser
-    void getConcert_fail_notFound() throws Exception {
+    void getConcertFailNotFound() throws Exception {
         Long invalidId = 999L;
         given(concertService.getConcert(invalidId))
                 .willThrow(new ConcertNotFoundException(ConcertErrorMessage.NOT_EXIST_CONCERT));
@@ -294,9 +294,9 @@ class ConcertControllerTest {
     }
 
     @Test
-    @DisplayName("[FAIL] 스케줄 목록 조회 실패 - 존재하지 않는 콘서트 (404 Not Found)")
+    @DisplayName("존재하지 않는 콘서트의 스케줄 목록을 조회하면 404 Not Found를 반환한다.")
     @WithMockUser
-    void getSchedules_fail_concertNotFound() throws Exception {
+    void getSchedulesFailConcertNotFound() throws Exception {
         Long invalidId = 999L;
         given(concertService.getSchedules(invalidId))
                 .willThrow(new ConcertNotFoundException(ConcertErrorMessage.NOT_EXIST_CONCERT));

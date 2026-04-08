@@ -42,8 +42,8 @@ class QueueRedisTest {
     }
 
     @Test
-    @DisplayName("active가 비어 있으면 대기 없이 즉시 입장한다")
-    void logic_enter_freePass() {
+    @DisplayName("active가 비어 있으면 대기 없이 즉시 입장한다.")
+    void logicEnterFreePass() {
         Long memberId = 100L;
 
         Long result = queueRedisRepository.register(SCHEDULE_ID, memberId, TEST_MAX_ACTIVE, 300000);
@@ -53,8 +53,8 @@ class QueueRedisTest {
     }
 
     @Test
-    @DisplayName("이미 active인 사용자는 재진입해도 active 상태를 유지하고 대기열에 중복 등록되지 않는다")
-    void logic_enter_activeMemberAgain() {
+    @DisplayName("이미 active인 사용자는 재진입해도 active 상태를 유지하고 대기열에 중복 등록되지 않는다.")
+    void logicEnterActiveMemberAgain() {
         Long memberId = 100L;
         queueRedisRepository.register(SCHEDULE_ID, memberId, TEST_MAX_ACTIVE, 300000);
 
@@ -66,8 +66,8 @@ class QueueRedisTest {
     }
 
     @Test
-    @DisplayName("active가 가득 차면 사용자는 대기열에 들어가고 순번을 받는다")
-    void logic_enter_wait() {
+    @DisplayName("active가 가득 차면 사용자는 대기열에 들어가고 순번을 받는다.")
+    void logicEnterWait() {
         for (long i = 1; i <= TEST_MAX_ACTIVE; i++) {
             queueRedisRepository.register(SCHEDULE_ID, i, TEST_MAX_ACTIVE, 300000);
         }
@@ -80,8 +80,8 @@ class QueueRedisTest {
     }
 
     @Test
-    @DisplayName("이미 대기열에 있는 사용자는 재진입해도 기존 순번을 반환하고 중복 등록되지 않는다")
-    void logic_enter_waitingMemberAgain() {
+    @DisplayName("이미 대기열에 있는 사용자는 재진입해도 기존 순번을 반환하고 중복 등록되지 않는다.")
+    void logicEnterWaitingMemberAgain() {
         for (long i = 1; i <= TEST_MAX_ACTIVE; i++) {
             queueRedisRepository.register(SCHEDULE_ID, i, TEST_MAX_ACTIVE, 300000);
         }
@@ -97,8 +97,8 @@ class QueueRedisTest {
     }
 
     @Test
-    @DisplayName("스케줄러는 빈 자리가 생기면 대기열 사용자를 active로 이동시킨다")
-    void logic_scheduler_move() {
+    @DisplayName("스케줄러는 빈자리가 생기면 대기열 사용자를 active로 이동시킨다.")
+    void logicSchedulerMove() {
         long tinyMax = 1L;
         queueRedisRepository.register(SCHEDULE_ID, 100L, tinyMax, 300000);
         queueRedisRepository.register(SCHEDULE_ID, 200L, tinyMax, 300000);
@@ -113,8 +113,8 @@ class QueueRedisTest {
     }
 
     @Test
-    @DisplayName("중복으로 추가해도 processing schedule set에는 하나만 저장된다")
-    void logic_manage_set() {
+    @DisplayName("processing schedule에 중복으로 추가해도 하나만 저장된다.")
+    void logicManageSet() {
         queueRedisRepository.addProcessingSchedule(SCHEDULE_ID);
         queueRedisRepository.addProcessingSchedule(SCHEDULE_ID);
         queueRedisRepository.addProcessingSchedule(SCHEDULE_ID);
@@ -125,8 +125,8 @@ class QueueRedisTest {
     }
 
     @Test
-    @DisplayName("wait와 active가 모두 비면 processing schedule에서 자동 제거된다")
-    void logic_cleanup_processingSchedule_whenQueueDrained() {
+    @DisplayName("wait와 active가 모두 비면 processing schedule에서 자동으로 제거된다.")
+    void logicCleanupProcessingScheduleWhenQueueDrained() {
         long tinyMax = 1L;
         queueRedisRepository.addProcessingSchedule(SCHEDULE_ID);
         queueRedisRepository.register(SCHEDULE_ID, 100L, tinyMax, 300000);
@@ -141,8 +141,8 @@ class QueueRedisTest {
     }
 
     @Test
-    @DisplayName("만료된 active 토큰은 상태 조회 시 제거되고 not found로 처리된다")
-    void logic_status_expiredActiveRemoved() {
+    @DisplayName("만료된 active 토큰은 상태 조회 시 제거되고 not found로 처리된다.")
+    void logicStatusExpiredActiveRemoved() {
         Long memberId = 777L;
         redisTemplate.opsForZSet().add(getActiveKey(), memberId.toString(), System.currentTimeMillis() - 1_000);
 

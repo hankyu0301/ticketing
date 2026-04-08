@@ -28,10 +28,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 class ReservationConcurrencyTest extends IntegrationTestSupport {
 
-    @Autowired private ReservationFacade reservationFacade;
-    @Autowired private SeatMapper seatMapper;
-    @Autowired private TicketingTestDataSetup testDataSetup;
-    @Autowired private DatabaseCleaner databaseCleaner;
+    @Autowired
+    private ReservationFacade reservationFacade;
+    @Autowired
+    private SeatMapper seatMapper;
+    @Autowired
+    private TicketingTestDataSetup testDataSetup;
+    @Autowired
+    private DatabaseCleaner databaseCleaner;
 
     private Long scheduleId;
     private Long seatId;
@@ -53,8 +57,8 @@ class ReservationConcurrencyTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("100명 동시 요청 시 1명만 성공해야 한다.")
-    void pessimistic_lock_success() throws InterruptedException {
+    @DisplayName("100명이 동시에 요청하면 1명만 예약에 성공해야 한다.")
+    void pessimisticLockSuccess() throws InterruptedException {
         // given
         int threadCount = 100;
         ExecutorService executorService = Executors.newFixedThreadPool(32);

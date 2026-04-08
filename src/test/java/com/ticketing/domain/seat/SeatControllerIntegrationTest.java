@@ -52,8 +52,8 @@ class SeatControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("좌석 조회는 active 사용자가 요청하면 controller, aop, service를 거쳐 처리된다")
-    void getSeats_success_withActiveToken() throws Exception {
+    @DisplayName("active 사용자가 좌석 조회를 요청하면 controller, aop, service를 거쳐 처리한다.")
+    void getSeatsSuccessWithActiveToken() throws Exception {
         Authentication authentication = createAuthentication(1L);
         Seat seat = Seat.create(1L, 1, "VIP", BigDecimal.valueOf(10000));
 
@@ -70,8 +70,8 @@ class SeatControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("좌석 조회는 active token이 없으면 controller 단계에서 차단된다")
-    void getSeats_fail_withoutActiveToken() throws Exception {
+    @DisplayName("active token이 없으면 좌석 조회는 controller 단계에서 차단된다.")
+    void getSeatsFailWithoutActiveToken() throws Exception {
         Authentication authentication = createAuthentication(1L);
 
         given(queueRedisRepository.validateAndExtendActiveMember(1L, 1L)).willReturn(false);

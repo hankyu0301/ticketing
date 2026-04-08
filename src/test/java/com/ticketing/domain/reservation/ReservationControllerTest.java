@@ -39,20 +39,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(ReservationController.class)
-public class ReservationControllerTest {
+class ReservationControllerTest {
 
     @Autowired
-    MockMvc mockMvc;
+    private MockMvc mockMvc;
 
     @Autowired
-    ObjectMapper objectMapper;
+    private ObjectMapper objectMapper;
 
     @MockitoBean
-    ReservationService reservationService;
+    private ReservationService reservationService;
 
     @Test
-    @DisplayName("예약 성공 테스트 - 201 Created 반환")
-    void create_success() throws Exception {
+    @DisplayName("예약에 성공하면 201 Created를 반환한다.")
+    void createSuccess() throws Exception {
 
         // given
         ReservationCreateRequest request = new ReservationCreateRequest();
@@ -87,9 +87,9 @@ public class ReservationControllerTest {
     }
 
     @Test
-    @DisplayName("예약 실패 테스트 - 스케줄 ID 누락 (400 Bad Request)")
+    @DisplayName("예약 요청에 스케줄 ID가 없으면 400 Bad Request를 반환한다.")
     @WithMockUser
-    void create_validation_fail_scheduleId_null() throws Exception {
+    void createValidationFailScheduleIdNull() throws Exception {
         // given
         ReservationCreateRequest invalidRequest = new ReservationCreateRequest();
         ReflectionTestUtils.setField(invalidRequest, "seatId", 1L);
@@ -108,9 +108,9 @@ public class ReservationControllerTest {
     }
 
     @Test
-    @DisplayName("예약 실패 테스트 - 좌석 ID 누락 (400 Bad Request)")
+    @DisplayName("예약 요청에 좌석 ID가 없으면 400 Bad Request를 반환한다.")
     @WithMockUser
-    void create_validation_fail_seatId_null() throws Exception {
+    void createValidationFailSeatIdNull() throws Exception {
         // given
         ReservationCreateRequest invalidRequest = new ReservationCreateRequest();
         ReflectionTestUtils.setField(invalidRequest, "scheduleId", 1L);
@@ -129,8 +129,8 @@ public class ReservationControllerTest {
     }
 
     @Test
-    @DisplayName("예약 실패 테스트 - 요청 회차와 좌석 회차 불일치")
-    void create_fail_scheduleSeatMismatch() throws Exception {
+    @DisplayName("요청한 회차와 좌석의 회차가 다르면 400 Bad Request를 반환한다.")
+    void createFailScheduleSeatMismatch() throws Exception {
         ReservationCreateRequest request = new ReservationCreateRequest();
         ReflectionTestUtils.setField(request, "scheduleId", 1L);
         ReflectionTestUtils.setField(request, "seatId", 1L);
@@ -161,7 +161,7 @@ public class ReservationControllerTest {
     }
 
     @Test
-    @DisplayName("내 예약 목록 조회 성공")
+    @DisplayName("내 예약 목록을 조회한다.")
     void getReservations() throws Exception {
         // given
         Long memberId = 1L;

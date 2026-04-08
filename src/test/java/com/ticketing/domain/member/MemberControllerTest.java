@@ -37,8 +37,8 @@ class MemberControllerTest {
 
     @Test
     @WithMockUser
-    @DisplayName("회원가입 성공 - 201 Created 반환")
-    void signup_success() throws Exception {
+    @DisplayName("회원가입에 성공하면 201 Created를 반환한다.")
+    void signupSuccess() throws Exception {
         MemberSignupRequest request = new MemberSignupRequest();
         ReflectionTestUtils.setField(request, "email", "test@example.com");
         ReflectionTestUtils.setField(request, "password", "Password123!");
@@ -59,8 +59,8 @@ class MemberControllerTest {
 
     @Test
     @WithMockUser
-    @DisplayName("회원가입 실패 테스트 - 이메일 누락 (400 Bad Request)")
-    void signup_validation_fail_email_null() throws Exception {
+    @DisplayName("회원가입 요청에 이메일이 없으면 400 Bad Request를 반환한다.")
+    void signupValidationFailEmailNull() throws Exception {
         MemberSignupRequest invalidRequest = new MemberSignupRequest();
         ReflectionTestUtils.setField(invalidRequest, "nickname", "테스트");
         ReflectionTestUtils.setField(invalidRequest, "password", "Password123!");
@@ -77,8 +77,8 @@ class MemberControllerTest {
 
     @Test
     @WithMockUser
-    @DisplayName("회원가입 실패 테스트 - 비밀번호 누락 (400 Bad Request)")
-    void signup_validation_fail_password_null() throws Exception {
+    @DisplayName("회원가입 요청에 비밀번호가 없으면 400 Bad Request를 반환한다.")
+    void signupValidationFailPasswordNull() throws Exception {
         MemberSignupRequest invalidRequest = new MemberSignupRequest();
         ReflectionTestUtils.setField(invalidRequest, "email", "test@example.com");
         ReflectionTestUtils.setField(invalidRequest, "nickname", "테스트");

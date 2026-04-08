@@ -34,17 +34,17 @@ import static org.mockito.Mockito.*;
 class ConcertServiceTest {
 
     @InjectMocks
-    ConcertService concertService;
+    private ConcertService concertService;
 
     @Mock
-    ConcertMapper concertMapper;
+    private ConcertMapper concertMapper;
 
     @Mock
-    ConcertScheduleMapper concertScheduleMapper;
+    private ConcertScheduleMapper concertScheduleMapper;
 
     @Test
-    @DisplayName("[SUCCESS] 콘서트 생성")
-    void createConcert_success() {
+    @DisplayName("콘서트를 생성한다.")
+    void createConcertSuccess() {
         ConcertCreateRequest request = new ConcertCreateRequest();
         ReflectionTestUtils.setField(request, "title", "테스트 콘서트");
         ReflectionTestUtils.setField(request, "description", "설명");
@@ -62,8 +62,8 @@ class ConcertServiceTest {
     }
 
     @Test
-    @DisplayName("[SUCCESS] 스케줄 생성 성공")
-    void createSchedule_success() {
+    @DisplayName("스케줄을 생성한다.")
+    void createScheduleSuccess() {
         Long concertId = 1L;
         ConcertScheduleCreateRequest request = new ConcertScheduleCreateRequest();
         ReflectionTestUtils.setField(request, "concertDate", LocalDateTime.now().plusDays(1));
@@ -85,8 +85,8 @@ class ConcertServiceTest {
     }
 
     @Test
-    @DisplayName("[FAIL] 존재하지 않는 콘서트에는 스케줄을 생성할 수 없다")
-    void createSchedule_fail_concertNotFound() {
+    @DisplayName("존재하지 않는 콘서트에는 스케줄을 생성할 수 없다.")
+    void createScheduleFailConcertNotFound() {
         Long invalidConcertId = 999L;
         ConcertScheduleCreateRequest request = new ConcertScheduleCreateRequest();
 
@@ -100,8 +100,8 @@ class ConcertServiceTest {
     }
 
     @Test
-    @DisplayName("[FAIL] 예매 오픈 시간이 과거면 스케줄을 생성할 수 없다")
-    void createSchedule_fail_reservationOpenAtInPast() {
+    @DisplayName("예매 오픈 시간이 과거면 스케줄을 생성할 수 없다.")
+    void createScheduleFailReservationOpenAtInPast() {
         Long concertId = 1L;
         ConcertScheduleCreateRequest request = new ConcertScheduleCreateRequest();
         ReflectionTestUtils.setField(request, "concertDate", LocalDateTime.now().plusDays(1));
@@ -118,8 +118,8 @@ class ConcertServiceTest {
     }
 
     @Test
-    @DisplayName("[FAIL] 예매 오픈 시간은 공연 시작 전이어야 한다")
-    void createSchedule_fail_reservationOpenAtAfterConcertDate() {
+    @DisplayName("예매 오픈 시간은 공연 시작 전이어야 한다.")
+    void createScheduleFailReservationOpenAtAfterConcertDate() {
         Long concertId = 1L;
         ConcertScheduleCreateRequest request = new ConcertScheduleCreateRequest();
         ReflectionTestUtils.setField(request, "concertDate", LocalDateTime.now().plusDays(1));
@@ -136,8 +136,8 @@ class ConcertServiceTest {
     }
 
     @Test
-    @DisplayName("[SUCCESS] 콘서트 조회 성공")
-    void getConcert_success() {
+    @DisplayName("콘서트를 조회한다.")
+    void getConcertSuccess() {
         Long concertId = 1L;
         Concert concert = Concert.create("조회된 콘서트", "설명");
         ReflectionTestUtils.setField(concert, "concertId", concertId);
@@ -151,8 +151,8 @@ class ConcertServiceTest {
     }
 
     @Test
-    @DisplayName("[FAIL] 존재하지 않는 콘서트는 조회할 수 없다")
-    void getConcert_fail_notFound() {
+    @DisplayName("존재하지 않는 콘서트는 조회할 수 없다.")
+    void getConcertFailNotFound() {
         Long invalidId = 999L;
         given(concertMapper.findById(invalidId)).willReturn(Optional.empty());
 
@@ -162,8 +162,8 @@ class ConcertServiceTest {
     }
 
     @Test
-    @DisplayName("[SUCCESS] 스케줄 목록 조회 성공")
-    void getSchedules_success() {
+    @DisplayName("스케줄 목록을 조회한다.")
+    void getSchedulesSuccess() {
         Long concertId = 1L;
         ConcertSchedule schedule = ConcertSchedule.create(concertId, LocalDateTime.now(), LocalDateTime.now(), 100);
 
@@ -176,8 +176,8 @@ class ConcertServiceTest {
     }
 
     @Test
-    @DisplayName("[FAIL] 존재하지 않는 콘서트의 스케줄 목록은 조회할 수 없다")
-    void getSchedules_fail_concertNotFound() {
+    @DisplayName("존재하지 않는 콘서트의 스케줄 목록은 조회할 수 없다.")
+    void getSchedulesFailConcertNotFound() {
         Long invalidId = 999L;
         given(concertMapper.existsById(invalidId)).willReturn(false);
 

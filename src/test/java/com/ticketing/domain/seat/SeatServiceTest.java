@@ -36,17 +36,17 @@ import static org.mockito.Mockito.verify;
 class SeatServiceTest {
 
     @InjectMocks
-    SeatService seatService;
+    private SeatService seatService;
 
     @Mock
-    SeatMapper seatMapper;
+    private SeatMapper seatMapper;
 
     @Mock
-    ConcertScheduleMapper concertScheduleMapper;
+    private ConcertScheduleMapper concertScheduleMapper;
 
     @Test
-    @DisplayName("[SUCCESS] 좌석 생성 성공")
-    void createSeats_success() {
+    @DisplayName("좌석을 생성한다.")
+    void createSeatsSuccess() {
         Long scheduleId = 1L;
         SeatCreateRequest request = createRequest(50, "VIP", BigDecimal.valueOf(10000));
 
@@ -64,8 +64,8 @@ class SeatServiceTest {
     }
 
     @Test
-    @DisplayName("[FAIL] 존재하지 않는 회차에는 좌석을 생성할 수 없다")
-    void createSeats_fail_scheduleNotFound() {
+    @DisplayName("존재하지 않는 회차에는 좌석을 생성할 수 없다.")
+    void createSeatsFailScheduleNotFound() {
         Long scheduleId = 999L;
         SeatCreateRequest request = createRequest(10, "VIP", BigDecimal.valueOf(10000));
 
@@ -78,8 +78,8 @@ class SeatServiceTest {
     }
 
     @Test
-    @DisplayName("[FAIL] 회차의 총 좌석 수와 요청 좌석 수가 다르면 생성할 수 없다")
-    void createSeats_fail_totalSeatMismatch() {
+    @DisplayName("회차의 총 좌석 수와 요청 좌석 수가 다르면 좌석을 생성할 수 없다.")
+    void createSeatsFailTotalSeatMismatch() {
         Long scheduleId = 1L;
         SeatCreateRequest request = createRequest(50, "VIP", BigDecimal.valueOf(10000));
 
@@ -93,8 +93,8 @@ class SeatServiceTest {
     }
 
     @Test
-    @DisplayName("[FAIL] 이미 좌석이 생성된 회차에는 다시 생성할 수 없다")
-    void createSeats_fail_alreadyCreated() {
+    @DisplayName("이미 좌석이 생성된 회차에는 다시 생성할 수 없다.")
+    void createSeatsFailAlreadyCreated() {
         Long scheduleId = 1L;
         SeatCreateRequest request = createRequest(50, "VIP", BigDecimal.valueOf(10000));
 
@@ -109,8 +109,8 @@ class SeatServiceTest {
     }
 
     @Test
-    @DisplayName("[SUCCESS] 좌석 조회 성공")
-    void getSeats_success() {
+    @DisplayName("좌석을 조회한다.")
+    void getSeatsSuccess() {
         Long scheduleId = 1L;
         Seat seat1 = Seat.create(scheduleId, 1, "S", BigDecimal.valueOf(5000));
         Seat seat2 = Seat.create(scheduleId, 2, "S", BigDecimal.valueOf(5000));
