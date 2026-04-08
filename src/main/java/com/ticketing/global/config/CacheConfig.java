@@ -32,7 +32,9 @@ public class CacheConfig {
         objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         objectMapper.activateDefaultTyping(
                 BasicPolymorphicTypeValidator.builder()
-                        .allowIfBaseType(Object.class)
+                        .allowIfSubType("com.ticketing.api.concert.dto")
+                        .allowIfSubType("java.util")
+                        .allowIfSubType("java.time")
                         .build(),
                 ObjectMapper.DefaultTyping.NON_FINAL
         );
@@ -43,6 +45,7 @@ public class CacheConfig {
                         RedisSerializationContext.SerializationPair.fromSerializer(new GenericJackson2JsonRedisSerializer(objectMapper)))
                 .entryTtl(Duration.ofHours(1));
         return RedisCacheManager.RedisCacheManagerBuilder.fromConnectionFactory(redisConnectionFactory)
-                .cacheDefaults(redisCacheConfiguration).build();
+                .cacheDefaults(redisCacheConfiguration)
+                .build();
     }
 }

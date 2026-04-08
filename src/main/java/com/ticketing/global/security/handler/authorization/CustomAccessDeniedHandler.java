@@ -30,14 +30,12 @@ public class CustomAccessDeniedHandler implements AccessDeniedHandler {
                        AccessDeniedException accessDeniedException) throws IOException, ServletException {
 
         logErrorDetails(accessDeniedException, request.getRequestURI());
-
         configureResponse(response);
-
         writeErrorResponse(response);
     }
 
     private void logErrorDetails(AccessDeniedException accessDeniedException, String requestUri) {
-        log.error("Not Authenticated Request in AccessDeniedHandler", accessDeniedException);
+        log.error("Access denied", accessDeniedException);
         log.error("Request Uri: {}", requestUri);
     }
 

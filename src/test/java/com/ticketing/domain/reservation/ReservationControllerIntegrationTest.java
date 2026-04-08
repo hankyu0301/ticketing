@@ -3,6 +3,7 @@ package com.ticketing.domain.reservation;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketing.api.reservation.dto.ReservationCreateRequest;
 import com.ticketing.api.reservation.dto.ReservationResponse;
+import com.ticketing.application.queue.scheduler.QueueScheduler;
 import com.ticketing.application.reservation.facade.ReservationFacade;
 import com.ticketing.application.reservation.service.ReservationService;
 import com.ticketing.domain.reservation.model.Reservation;
@@ -41,7 +42,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@TestPropertySource(properties = "scheduler.fixed-delay=100000000")
+@TestPropertySource(properties = "spring.session.store-type=none")
 class ReservationControllerIntegrationTest {
 
     @Autowired
@@ -55,6 +56,9 @@ class ReservationControllerIntegrationTest {
 
     @MockitoBean
     private ReservationFacade reservationFacade;
+
+    @MockitoBean
+    private QueueScheduler queueScheduler;
 
     @MockitoSpyBean
     private ReservationService reservationService;

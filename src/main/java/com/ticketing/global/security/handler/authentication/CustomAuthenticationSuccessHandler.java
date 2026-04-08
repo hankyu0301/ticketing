@@ -31,7 +31,11 @@ public class CustomAuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setStatus(HttpServletResponse.SC_OK);
-        response.getWriter().write(objectMapper.writeValueAsString(ResponseDTO.getSuccessResult(welcomeMessage(authentication))));
+        response.getWriter().write(
+                objectMapper.writeValueAsString(
+                        ResponseDTO.getSuccessResult(welcomeMessage(authentication))
+                )
+        );
     }
 
     private String welcomeMessage(Authentication authentication) {
