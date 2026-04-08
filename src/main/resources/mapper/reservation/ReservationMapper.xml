@@ -16,9 +16,34 @@
         WHERE reservation_id = #{reservationId}
     </select>
 
+    <select id="findByIdForUpdate" resultType="com.ticketing.domain.reservation.model.Reservation" timeout="5000">
+        SELECT reservation_id, member_id, seat_id, schedule_id, status, reserved_at, expired_at, created_at, updated_at
+        FROM reservations
+        WHERE reservation_id = #{reservationId}
+        FOR UPDATE
+    </select>
+
     <select id="findAllByMemberId" resultType="com.ticketing.domain.reservation.model.Reservation">
         SELECT reservation_id, member_id, seat_id, schedule_id, status, reserved_at, expired_at, created_at, updated_at
         FROM reservations
         WHERE member_id = #{memberId}
     </select>
+
+    <select id="findExpiredPendingReservationIds" resultType="long">
+        SELECT reservation_id
+        FROM reservations
+        WHERE status = 'PENDING'
+          AND expired_at IS NOT NULL
+          AND expired_at &lt;= #{now}
+        ORDER BY expired_at ASC
+        LIMIT #{limit}
+    </select>
+
+    <update id="update">
+        UPDATE reservations
+        SET status = #{status},
+            expired_at = #{expiredAt},
+            updated_at = NOW()
+        WHERE reservation_id = #{reservationId}
+    </update>
 </mapper>

@@ -6,6 +6,11 @@ server:
         same-site: lax
 
 spring:
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
   session:
     store-type: redis
     redis:
@@ -65,3 +70,12 @@ ticketing:
     wait-time-ms: 10000
     retry-interval-ms: 100
     lease-time-ms: 3000
+  payment:
+    expiration:
+      scan-delay-ms: 60000
+      batch-size: 100
+    rabbitmq:
+      exchange: ticketing.payment
+      queue: ticketing.payment.requested
+      routing-key: payment.requested
+      listener-auto-startup: true

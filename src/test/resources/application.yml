@@ -9,6 +9,15 @@ spring:
   autoconfigure:
     exclude:
       - org.redisson.spring.starter.RedissonAutoConfigurationV2
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    dynamic: false
+    listener:
+      simple:
+        auto-startup: false
   session:
     store-type: redis
     redis:
@@ -70,3 +79,12 @@ scheduler:
 ticketing:
   lock:
     strategy: PESSIMISTIC
+  payment:
+    expiration:
+      scan-delay-ms: 60000
+      batch-size: 100
+    rabbitmq:
+      exchange: ticketing.payment
+      queue: ticketing.payment.requested
+      routing-key: payment.requested
+      listener-auto-startup: false

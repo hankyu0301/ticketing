@@ -72,8 +72,10 @@ CREATE TABLE payments (
     reservation_id BIGINT NOT NULL COMMENT 'reservation foreign key',
     member_id BIGINT NOT NULL COMMENT 'member foreign key',
     amount DECIMAL(10, 2) NOT NULL COMMENT 'payment amount',
-    status VARCHAR(20) NOT NULL DEFAULT 'COMPLETED' COMMENT 'payment status',
-    paid_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'payment timestamp',
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING' COMMENT 'payment status',
+    paid_at DATETIME DEFAULT NULL COMMENT 'payment timestamp',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'created timestamp',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'updated timestamp',
     CONSTRAINT fk_payments_reservation
         FOREIGN KEY (reservation_id) REFERENCES reservations(reservation_id),
     CONSTRAINT fk_payments_member
