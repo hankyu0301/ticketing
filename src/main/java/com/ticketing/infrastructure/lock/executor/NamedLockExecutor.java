@@ -20,11 +20,15 @@ public class NamedLockExecutor implements LockExecutor {
     @Transactional
     @Override
     public <T> T execute(String lockName, Supplier<T> supplier) {
+        boolean locked = false;
         try{
             namedLockRepository.getLock(lockName);
+            locked = true;
             return supplier.get();
         } finally {
-            namedLockRepository.releaseLock(lockName);
+            if (locked) {
+                namedLockRepository.releaseLock(lockName);
+            }
         }
     }
 }

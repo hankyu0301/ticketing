@@ -8,7 +8,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
-import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationFailureHandler;
 import org.springframework.stereotype.Component;
@@ -31,14 +30,14 @@ public class CustomAuthenticationFailureHandler extends SimpleUrlAuthenticationF
                                         AuthenticationException exception) throws IOException, ServletException {
 
         logErrorDetails(exception, request.getRequestURI());
-        if (exception instanceof BadCredentialsException) {
-            handleFailureResponse(response);
-        }
+        handleFailureResponse(response);
     }
-    private void logErrorDetails(AuthenticationException accessDeniedException, String requestUri) {
-        log.error("Not Authorized Request in AuthenticationFailureHandler ", accessDeniedException);
+
+    private void logErrorDetails(AuthenticationException authenticationException, String requestUri) {
+        log.error("Authentication failed", authenticationException);
         log.error("Request Uri: {}", requestUri);
     }
+
     private void handleFailureResponse(HttpServletResponse response) throws IOException {
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);

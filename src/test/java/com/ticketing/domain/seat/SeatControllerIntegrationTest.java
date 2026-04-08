@@ -1,6 +1,7 @@
 package com.ticketing.domain.seat;
 
 import com.ticketing.api.seat.dto.SeatResponse;
+import com.ticketing.application.queue.scheduler.QueueScheduler;
 import com.ticketing.application.seat.service.SeatService;
 import com.ticketing.domain.seat.model.Seat;
 import com.ticketing.global.security.service.CustomUserDetails;
@@ -13,11 +14,15 @@ import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
 
 import java.math.BigDecimal;
 import java.util.Collections;
@@ -34,8 +39,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@TestPropertySource(properties = "scheduler.fixed-delay=100000000")
+@Testcontainers
 class SeatControllerIntegrationTest {
+
+    @Container
+    @ServiceConnection
+    static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:alpine"))
+            .withExposedPorts(6379);
 
     @Autowired
     private MockMvc mockMvc;
@@ -45,6 +55,9 @@ class SeatControllerIntegrationTest {
 
     @MockitoBean
     private SeatService seatService;
+
+    @MockitoBean
+    private QueueScheduler queueScheduler;
 
     @BeforeEach
     void setUp() {
