@@ -64,13 +64,13 @@ class SecurityTest {
         MemberSignupRequest memberSignupRequest = new MemberSignupRequest();
         ReflectionTestUtils.setField(memberSignupRequest, "email", MEMBER_LOGIN_EMAIL);
         ReflectionTestUtils.setField(memberSignupRequest, "password", MEMBER_LOGIN_PASSWORD);
-        ReflectionTestUtils.setField(memberSignupRequest, "nickname", "tester");
+        ReflectionTestUtils.setField(memberSignupRequest, "nickname", "\uD14C\uC2A4\uD130");
 
         memberService.signUp(memberSignupRequest);
     }
 
     @Test
-    @DisplayName("비회원은 홈에 접근할 수 있다")
+    @DisplayName("\uBE44\uD68C\uC6D0 \uAD8C\uD55C\uC73C\uB85C \uD648 \uC811\uADFC")
     @WithAnonymousUser
     void anonymous_authorization_home() throws Exception {
         mockMvc.perform(get("/"))
@@ -79,7 +79,7 @@ class SecurityTest {
     }
 
     @Test
-    @DisplayName("회원은 홈에 접근할 수 있다")
+    @DisplayName("\uD68C\uC6D0 \uAD8C\uD55C\uC73C\uB85C \uD648 \uC811\uADFC")
     @WithMockUser(authorities = "USER")
     void authentication_member() throws Exception {
         mockMvc.perform(get("/"))
@@ -88,7 +88,7 @@ class SecurityTest {
     }
 
     @Test
-    @DisplayName("비회원은 회원가입을 할 수 있다")
+    @DisplayName("\uC775\uBA85 \uC0AC\uC6A9\uC790\uB294 \uD68C\uC6D0\uAC00\uC785\uC774 \uAC00\uB2A5\uD558\uB2E4")
     @WithAnonymousUser
     void anonymous_signup_success() throws Exception {
         mockMvc.perform(post("/api/v1/members/signup")
@@ -98,7 +98,7 @@ class SecurityTest {
                                 {
                                   "email": "signup@test.com",
                                   "password": "password1234",
-                                  "nickname": "anonymous"
+                                  "nickname": "\uC775\uBA85\uAC00\uC785"
                                 }
                                 """))
                 .andDo(print())
@@ -106,7 +106,7 @@ class SecurityTest {
     }
 
     @Test
-    @DisplayName("비인증 사용자가 보호 API에 접근하면 JSON 401을 받는다")
+    @DisplayName("\uBE44\uC778\uC99D \uC0AC\uC6A9\uC790\uAC00 \uBCF4\uD638 API\uC5D0 \uC811\uADFC\uD558\uBA74 JSON 401\uC744 \uBC1B\uB294\uB2E4")
     @WithAnonymousUser
     void anonymous_protected_api_returns_json_unauthorized() throws Exception {
         mockMvc.perform(get("/api/v1/schedules/1/seats"))
@@ -117,7 +117,7 @@ class SecurityTest {
     }
 
     @Test
-    @DisplayName("로그인에 성공하면 인증된다")
+    @DisplayName("\uB85C\uADF8\uC778 \uC131\uACF5")
     void login_success() throws Exception {
         mockMvc.perform(post(MEMBER_LOGIN_URL)
                         .with(csrf())
@@ -129,7 +129,7 @@ class SecurityTest {
     }
 
     @Test
-    @DisplayName("USER 권한으로 ADMIN 엔드포인트에 접근하면 JSON 403을 받는다")
+    @DisplayName("\uC811\uADFC \uAD8C\uD55C \uC5C6\uC74C - USER\uAC00 ADMIN \uAD8C\uD55C\uC73C\uB85C \uC811\uADFC\uD558\uBA74 JSON 403")
     @WithMockUser(authorities = "USER")
     void endpoint_with_user_authority_authorized() throws Exception {
         mockMvc.perform(get("/admin"))
@@ -140,7 +140,7 @@ class SecurityTest {
     }
 
     @Test
-    @DisplayName("잘못된 비밀번호로 로그인하면 JSON 401을 받는다")
+    @DisplayName("\uB85C\uADF8\uC778 \uC2E4\uD328 - \uBE44\uBC00\uBC88\uD638 \uBD88\uC77C\uCE58 \uC2DC JSON 401")
     void login_fail_with_wrong_pwsd() throws Exception {
         mockMvc.perform(post(MEMBER_LOGIN_URL)
                         .with(csrf())
@@ -154,7 +154,7 @@ class SecurityTest {
     }
 
     @Test
-    @DisplayName("존재하지 않는 회원으로 로그인하면 JSON 401을 받는다")
+    @DisplayName("\uB85C\uADF8\uC778 \uC2E4\uD328 - \uC874\uC7AC\uD558\uC9C0 \uC54A\uB294 \uD68C\uC6D0\uC774\uBA74 JSON 401")
     void login_fail_not_exist() throws Exception {
         mockMvc.perform(post(MEMBER_LOGIN_URL)
                         .with(csrf())
@@ -168,7 +168,7 @@ class SecurityTest {
     }
 
     @Test
-    @DisplayName("로그아웃에 성공한다")
+    @DisplayName("\uB85C\uADF8\uC544\uC6C3 \uC131\uACF5")
     void logout() throws Exception {
         mockMvc.perform(post("/api/v1/members/logout").with(csrf()))
                 .andDo(print())

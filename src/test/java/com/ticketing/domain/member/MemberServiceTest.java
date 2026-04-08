@@ -1,11 +1,11 @@
 package com.ticketing.domain.member;
 
-
 import com.ticketing.api.member.dto.MemberSignupRequest;
 import com.ticketing.api.member.dto.MemberSignupResponse;
-import com.ticketing.infrastructure.persistence.member.MemberMapper;
 import com.ticketing.application.member.service.MemberService;
 import com.ticketing.domain.member.exception.MemberBadRequestException;
+import com.ticketing.domain.member.model.Member;
+import com.ticketing.infrastructure.persistence.member.MemberMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,45 +19,52 @@ import static com.ticketing.domain.member.exception.MemberErrorMessage.DUPLICATE
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class MemberServiceTest {
 
     @InjectMocks
     private MemberService service;
-    @Mock
-    MemberMapper memberMapper;
 
     @Mock
-    PasswordEncoder passwordEncoder;
+    private MemberMapper memberMapper;
+
+    @Mock
+    private PasswordEncoder passwordEncoder;
 
     @Test
     @DisplayName("[SUCCESS] 회원가입 성공")
-    void singup_success() {
-        // given
-        MemberSignupRequest validRequestDto = new MemberSignupRequest();
-        ReflectionTestUtils.setField(validRequestDto, "email", "test@example.com");
-        ReflectionTestUtils.setField(validRequestDto, "password", "Password123!");
-        ReflectionTestUtils.setField(validRequestDto, "nickname", "테스터");
+    void signup_success() {
+        MemberSignupRequest request = new MemberSignupRequest();
+        ReflectionTestUtils.setField(request, "email", "test@example.com");
+        ReflectionTestUtils.setField(request, "password", "Password123!");
+        ReflectionTestUtils.setField(request, "nickname", "테스트");
 
-        MemberSignupResponse responseDTO = service.signUp(validRequestDto);
-        assertThat(responseDTO.getEmail()).isNotNull();
+        given(memberMapper.existByEmail("test@example.com")).willReturn(false);
+        given(passwordEncoder.encode("Password123!")).willReturn("encoded-password");
+
+        MemberSignupResponse response = service.signUp(request);
+
+        assertThat(response.getEmail()).isEqualTo("test@example.com");
+        assertThat(response.getNickname()).isEqualTo("테스트");
+        verify(passwordEncoder).encode("Password123!");
+        verify(memberMapper).insertMember(any(Member.class));
     }
 
     @Test
     @DisplayName("[ERROR] 회원가입 실패 : 중복 이메일 입력")
-    void singup_fail_duplicated_email() {
-        // given
-        MemberSignupRequest duplicatedEmailRequestDto = new MemberSignupRequest();
-        ReflectionTestUtils.setField(duplicatedEmailRequestDto, "email", "test@example.com");
-        ReflectionTestUtils.setField(duplicatedEmailRequestDto, "password", "Password123!");
-        ReflectionTestUtils.setField(duplicatedEmailRequestDto, "nickname", "테스터");
+    void signup_fail_duplicated_email() {
+        MemberSignupRequest request = new MemberSignupRequest();
+        ReflectionTestUtils.setField(request, "email", "test@example.com");
+        ReflectionTestUtils.setField(request, "password", "Password123!");
+        ReflectionTestUtils.setField(request, "nickname", "테스트");
 
-        when(memberMapper.existByEmail(any())).thenReturn(true);
-        // then
-        assertThatThrownBy(() -> service.signUp(duplicatedEmailRequestDto))
+        given(memberMapper.existByEmail("test@example.com")).willReturn(true);
+
+        assertThatThrownBy(() -> service.signUp(request))
                 .isInstanceOf(MemberBadRequestException.class)
-                .hasMessageStartingWith(DUPLICATED_EMAIL);
+                .hasMessage(DUPLICATED_EMAIL);
     }
 }

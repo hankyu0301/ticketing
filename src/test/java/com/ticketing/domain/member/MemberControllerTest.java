@@ -31,26 +31,26 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class MemberControllerTest {
 
     @Autowired
-    MockMvc mockMvc;
+    private MockMvc mockMvc;
 
     @Autowired
-    ObjectMapper objectMapper;
+    private ObjectMapper objectMapper;
 
     @MockitoBean
-    MemberService memberService;
+    private MemberService memberService;
 
     @Test
-    @DisplayName("회원가입 요청이 성공하면 201과 성공 응답을 반환한다")
     @WithMockUser
+    @DisplayName("\uD68C\uC6D0\uAC00\uC785 \uC131\uACF5 - 201 Created\uC640 \uC131\uACF5 \uC751\uB2F5 \uBC18\uD658")
     void signup_success() throws Exception {
         MemberSignupRequest request = new MemberSignupRequest();
         ReflectionTestUtils.setField(request, "email", "test@example.com");
         ReflectionTestUtils.setField(request, "password", "Password123!");
-        ReflectionTestUtils.setField(request, "nickname", "테스터");
+        ReflectionTestUtils.setField(request, "nickname", "\uD14C\uC2A4\uD2B8");
 
         Member member = Member.builder()
                 .email("test@example.com")
-                .nickname("테스터")
+                .nickname("\uD14C\uC2A4\uD2B8")
                 .build();
 
         given(memberService.signUp(any(MemberSignupRequest.class)))
@@ -65,16 +65,16 @@ class MemberControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.email").value("test@example.com"))
-                .andExpect(jsonPath("$.data.nickname").value("테스터"))
+                .andExpect(jsonPath("$.data.nickname").value("\uD14C\uC2A4\uD2B8"))
                 .andDo(print());
     }
 
     @Test
-    @DisplayName("회원가입 요청에서 이메일이 없으면 400과 검증 메시지를 반환한다")
     @WithMockUser
+    @DisplayName("\uD68C\uC6D0\uAC00\uC785 \uC2E4\uD328 - \uC774\uBA54\uC77C \uB204\uB77D (400 Bad Request)")
     void signup_validation_fail_email_null() throws Exception {
         MemberSignupRequest invalidRequest = new MemberSignupRequest();
-        ReflectionTestUtils.setField(invalidRequest, "nickname", "테스터");
+        ReflectionTestUtils.setField(invalidRequest, "nickname", "\uD14C\uC2A4\uD2B8");
         ReflectionTestUtils.setField(invalidRequest, "password", "Password123!");
 
         ResultActions resultActions = mockMvc.perform(post("/api/v1/members/signup")
@@ -90,12 +90,12 @@ class MemberControllerTest {
     }
 
     @Test
-    @DisplayName("회원가입 요청에서 비밀번호가 없으면 400과 검증 메시지를 반환한다")
     @WithMockUser
+    @DisplayName("\uD68C\uC6D0\uAC00\uC785 \uC2E4\uD328 - \uBE44\uBC00\uBC88\uD638 \uB204\uB77D (400 Bad Request)")
     void signup_validation_fail_password_null() throws Exception {
         MemberSignupRequest invalidRequest = new MemberSignupRequest();
         ReflectionTestUtils.setField(invalidRequest, "email", "test@example.com");
-        ReflectionTestUtils.setField(invalidRequest, "nickname", "테스터");
+        ReflectionTestUtils.setField(invalidRequest, "nickname", "\uD14C\uC2A4\uD2B8");
 
         ResultActions resultActions = mockMvc.perform(post("/api/v1/members/signup")
                 .with(csrf())
