@@ -1,0 +1,211 @@
+package com.ticketing.api.reservation.controller;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ticketing.api.reservation.controller.ReservationController;
+import com.ticketing.api.reservation.dto.ReservationCreateRequest;
+import com.ticketing.api.reservation.dto.ReservationResponse;
+import com.ticketing.application.reservation.service.ReservationService;
+import com.ticketing.domain.reservation.exception.ReservationBadRequestException;
+import com.ticketing.domain.reservation.exception.ReservationErrorMessage;
+import com.ticketing.domain.reservation.model.Reservation;
+import com.ticketing.global.security.service.CustomUserDetails;
+import com.ticketing.global.security.service.SessionMember;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
+
+import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.List;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.BDDMockito.given;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@WebMvcTest(ReservationController.class)
+class ReservationControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @MockitoBean
+    private ReservationService reservationService;
+
+    @Test
+    @DisplayName("예약에 성공하면 201 Created를 반환한다.")
+    void createSuccess() throws Exception {
+
+        // given
+        ReservationCreateRequest request = new ReservationCreateRequest();
+        ReflectionTestUtils.setField(request, "scheduleId", 1L);
+        ReflectionTestUtils.setField(request, "seatId", 1L);
+
+        Long memberId = 1L;
+        CustomUserDetails mockPrincipal = org.mockito.Mockito.mock(CustomUserDetails.class);
+        SessionMember mockSessionMember = org.mockito.Mockito.mock(SessionMember.class);
+
+        given(mockPrincipal.getSessionMember()).willReturn(mockSessionMember);
+        given(mockSessionMember.getMemberId()).willReturn(memberId);
+        given(mockPrincipal.getAuthorities()).willReturn(Collections.emptyList());
+
+        Authentication auth = new UsernamePasswordAuthenticationToken(mockPrincipal, null, mockPrincipal.getAuthorities());
+
+        ReservationResponse mockResponseDto = org.mockito.Mockito.mock(ReservationResponse.class);
+
+        given(reservationService.reserve(anyLong(), any(ReservationCreateRequest.class))).willReturn(mockResponseDto);
+
+        // when
+        ResultActions resultActions = mockMvc.perform(post("/api/v1/reservations")
+                .with(csrf())
+                .with(authentication(auth))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)));
+
+        // then
+        resultActions
+                .andExpect(status().isCreated())
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("예약 요청에 스케줄 ID가 없으면 400 Bad Request를 반환한다.")
+    @WithMockUser
+    void createValidationFailScheduleIdNull() throws Exception {
+        // given
+        ReservationCreateRequest invalidRequest = new ReservationCreateRequest();
+        ReflectionTestUtils.setField(invalidRequest, "seatId", 1L);
+
+        // when
+        ResultActions resultActions = mockMvc.perform(post("/api/v1/reservations")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(invalidRequest)));
+
+        // then
+        resultActions
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(ReservationErrorMessage.SCHEDULE_ID_NOT_EMPTY)))
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("예약 요청에 좌석 ID가 없으면 400 Bad Request를 반환한다.")
+    @WithMockUser
+    void createValidationFailSeatIdNull() throws Exception {
+        // given
+        ReservationCreateRequest invalidRequest = new ReservationCreateRequest();
+        ReflectionTestUtils.setField(invalidRequest, "scheduleId", 1L);
+
+        // when
+        ResultActions resultActions = mockMvc.perform(post("/api/v1/reservations")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(invalidRequest)));
+
+        // then
+        resultActions
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(ReservationErrorMessage.SEAT_ID_MUST_NOT_EMPTY)))
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("요청한 회차와 좌석의 회차가 다르면 400 Bad Request를 반환한다.")
+    void createFailScheduleSeatMismatch() throws Exception {
+        ReservationCreateRequest request = new ReservationCreateRequest();
+        ReflectionTestUtils.setField(request, "scheduleId", 1L);
+        ReflectionTestUtils.setField(request, "seatId", 1L);
+
+        Long memberId = 1L;
+        CustomUserDetails mockPrincipal = org.mockito.Mockito.mock(CustomUserDetails.class);
+        SessionMember mockSessionMember = org.mockito.Mockito.mock(SessionMember.class);
+
+        given(mockPrincipal.getSessionMember()).willReturn(mockSessionMember);
+        given(mockSessionMember.getMemberId()).willReturn(memberId);
+        given(mockPrincipal.getAuthorities()).willReturn(Collections.emptyList());
+
+        Authentication auth = new UsernamePasswordAuthenticationToken(mockPrincipal, null, mockPrincipal.getAuthorities());
+
+        given(reservationService.reserve(anyLong(), any(ReservationCreateRequest.class)))
+                .willThrow(new ReservationBadRequestException(ReservationErrorMessage.SEAT_NOT_BELONG_TO_SCHEDULE));
+
+        ResultActions resultActions = mockMvc.perform(post("/api/v1/reservations")
+                .with(csrf())
+                .with(authentication(auth))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)));
+
+        resultActions
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(ReservationErrorMessage.SEAT_NOT_BELONG_TO_SCHEDULE)))
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("내 예약 목록을 조회한다.")
+    void getReservations() throws Exception {
+        // given
+        Long memberId = 1L;
+        CustomUserDetails mockPrincipal = org.mockito.Mockito.mock(CustomUserDetails.class);
+        SessionMember mockSessionMember = org.mockito.Mockito.mock(SessionMember.class);
+
+        given(mockPrincipal.getSessionMember()).willReturn(mockSessionMember);
+        given(mockSessionMember.getMemberId()).willReturn(memberId);
+        given(mockPrincipal.getAuthorities()).willReturn(Collections.emptyList());
+
+        Authentication auth = new UsernamePasswordAuthenticationToken(mockPrincipal, null, mockPrincipal.getAuthorities());
+
+        Reservation reservation1 = Reservation.builder()
+                .memberId(memberId)
+                .seatId(50L)
+                .scheduleId(1L)
+                .reservedAt(LocalDateTime.now())
+                .expiredAt(LocalDateTime.now().plusMinutes(5))
+                .build();
+
+        Reservation reservation2 = Reservation.builder()
+                .memberId(memberId)
+                .seatId(51L)
+                .scheduleId(1L)
+                .reservedAt(LocalDateTime.now())
+                .expiredAt(LocalDateTime.now().plusMinutes(5))
+                .build();
+
+        ReflectionTestUtils.setField(reservation1, "reservationId", 100L);
+        ReflectionTestUtils.setField(reservation2, "reservationId", 101L);
+
+        List<ReservationResponse> responses = List.of(
+                new ReservationResponse(reservation1),
+                new ReservationResponse(reservation2)
+        );
+
+        given(reservationService.getReservations(memberId))
+                .willReturn(responses);
+
+        // when & then
+        mockMvc.perform(get("/api/v1/reservations")
+                        .with(authentication(auth))
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andDo(print())
+                .andExpect(status().isOk());
+    }
+}
