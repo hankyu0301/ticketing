@@ -47,8 +47,8 @@ class ReservationActiveTokenAspectTest {
     }
 
     @Test
-    @DisplayName("예약 요청은 request.scheduleId로 active token을 검증한다")
-    void validateQueueToken_success() throws NoSuchMethodException {
+    @DisplayName("예약 요청은 request.scheduleId로 active token을 검증한다.")
+    void validateQueueTokenSuccess() throws NoSuchMethodException {
         ReservationCreateRequest request = createRequest(7L, 3L);
         CustomUserDetails userDetails = authenticate(1L);
         Method method = ReservationController.class.getMethod(
@@ -67,8 +67,8 @@ class ReservationActiveTokenAspectTest {
     }
 
     @Test
-    @DisplayName("active token이 없으면 예약 요청은 차단된다")
-    void validateQueueToken_fail_whenQueueIsNotActive() throws NoSuchMethodException {
+    @DisplayName("active token이 없으면 예약 요청은 차단된다.")
+    void validateQueueTokenFailWhenQueueIsNotActive() throws NoSuchMethodException {
         ReservationCreateRequest request = createRequest(7L, 3L);
         CustomUserDetails userDetails = authenticate(1L);
         Method method = ReservationController.class.getMethod(

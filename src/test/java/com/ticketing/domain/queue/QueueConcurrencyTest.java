@@ -64,8 +64,8 @@ class QueueConcurrencyTest {
     }
 
     @Test
-    @DisplayName("100명이 동시에 접속했을 때 10명은 즉시 입장하고 90명은 정확한 순번을 받는다")
-    void concurrent_enter_queue_test() throws InterruptedException {
+    @DisplayName("100명이 동시에 접속하면 10명은 즉시 입장하고 90명은 정확한 순번을 받는다.")
+    void concurrentEnterQueueTest() throws InterruptedException {
         ExecutorService executorService = Executors.newFixedThreadPool(32);
         CountDownLatch latch = new CountDownLatch(THREAD_COUNT);
 

@@ -35,8 +35,8 @@ class MemberServiceTest {
     private PasswordEncoder passwordEncoder;
 
     @Test
-    @DisplayName("[SUCCESS] 회원가입 성공")
-    void signup_success() {
+    @DisplayName("회원가입에 성공한다.")
+    void signupSuccess() {
         MemberSignupRequest request = new MemberSignupRequest();
         ReflectionTestUtils.setField(request, "email", "test@example.com");
         ReflectionTestUtils.setField(request, "password", "Password123!");
@@ -54,8 +54,8 @@ class MemberServiceTest {
     }
 
     @Test
-    @DisplayName("[ERROR] 회원가입 실패 : 중복 이메일 입력")
-    void signup_fail_duplicated_email() {
+    @DisplayName("중복된 이메일로는 회원가입할 수 없다.")
+    void signupFailDuplicatedEmail() {
         MemberSignupRequest request = new MemberSignupRequest();
         ReflectionTestUtils.setField(request, "email", "test@example.com");
         ReflectionTestUtils.setField(request, "password", "Password123!");

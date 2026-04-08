@@ -36,8 +36,8 @@ class DefaultReservationServiceTest {
     private DefaultReservationService reservationService;
 
     @Test
-    @DisplayName("분산락 예약 서비스는 좌석과 회차가 일치하지 않으면 실패한다")
-    void reserve_fail_whenSeatDoesNotBelongToSchedule() {
+    @DisplayName("좌석과 회차가 일치하지 않으면 기본 예약 서비스는 실패한다.")
+    void reserveFailWhenSeatDoesNotBelongToSchedule() {
         Long seatId = 1L;
         Long memberId = 10L;
         Long requestedScheduleId = 100L;

@@ -69,8 +69,8 @@ class ReservationControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("예약 API는 controller, aop, service를 거쳐 active 사용자 요청을 처리한다")
-    void createReservation_success_withActiveToken() throws Exception {
+    @DisplayName("active 사용자가 예약 API를 호출하면 controller, aop, service를 거쳐 처리한다.")
+    void createReservationSuccessWithActiveToken() throws Exception {
         ReservationCreateRequest request = createRequest(1L, 1L);
         Authentication authentication = createAuthentication(1L);
 
@@ -101,8 +101,8 @@ class ReservationControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("active token이 없으면 controller 단계에서 차단되고 서비스는 호출되지 않는다")
-    void createReservation_fail_withoutActiveToken() throws Exception {
+    @DisplayName("active token이 없으면 예약 API는 controller 단계에서 차단된다.")
+    void createReservationFailWithoutActiveToken() throws Exception {
         ReservationCreateRequest request = createRequest(1L, 1L);
         Authentication authentication = createAuthentication(1L);
 

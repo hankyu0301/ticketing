@@ -10,7 +10,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -41,16 +40,16 @@ class MemberControllerTest {
 
     @Test
     @WithMockUser
-    @DisplayName("\uD68C\uC6D0\uAC00\uC785 \uC131\uACF5 - 201 Created\uC640 \uC131\uACF5 \uC751\uB2F5 \uBC18\uD658")
-    void signup_success() throws Exception {
+    @DisplayName("회원가입에 성공하면 201 Created와 성공 응답을 반환한다.")
+    void signupSuccess() throws Exception {
         MemberSignupRequest request = new MemberSignupRequest();
         ReflectionTestUtils.setField(request, "email", "test@example.com");
         ReflectionTestUtils.setField(request, "password", "Password123!");
-        ReflectionTestUtils.setField(request, "nickname", "\uD14C\uC2A4\uD2B8");
+        ReflectionTestUtils.setField(request, "nickname", "테스트");
 
         Member member = Member.builder()
                 .email("test@example.com")
-                .nickname("\uD14C\uC2A4\uD2B8")
+                .nickname("테스트")
                 .build();
 
         given(memberService.signUp(any(MemberSignupRequest.class)))
@@ -58,28 +57,28 @@ class MemberControllerTest {
 
         ResultActions resultActions = mockMvc.perform(post("/api/v1/members/signup")
                 .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
+                .contentType("application/json")
                 .content(objectMapper.writeValueAsString(request)));
 
         resultActions
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.email").value("test@example.com"))
-                .andExpect(jsonPath("$.data.nickname").value("\uD14C\uC2A4\uD2B8"))
+                .andExpect(jsonPath("$.data.nickname").value("테스트"))
                 .andDo(print());
     }
 
     @Test
     @WithMockUser
-    @DisplayName("\uD68C\uC6D0\uAC00\uC785 \uC2E4\uD328 - \uC774\uBA54\uC77C \uB204\uB77D (400 Bad Request)")
-    void signup_validation_fail_email_null() throws Exception {
+    @DisplayName("회원가입 요청에 이메일이 없으면 400 Bad Request를 반환한다.")
+    void signupValidationFailEmailNull() throws Exception {
         MemberSignupRequest invalidRequest = new MemberSignupRequest();
-        ReflectionTestUtils.setField(invalidRequest, "nickname", "\uD14C\uC2A4\uD2B8");
+        ReflectionTestUtils.setField(invalidRequest, "nickname", "테스트");
         ReflectionTestUtils.setField(invalidRequest, "password", "Password123!");
 
         ResultActions resultActions = mockMvc.perform(post("/api/v1/members/signup")
                 .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
+                .contentType("application/json")
                 .content(objectMapper.writeValueAsString(invalidRequest)));
 
         resultActions
@@ -91,15 +90,15 @@ class MemberControllerTest {
 
     @Test
     @WithMockUser
-    @DisplayName("\uD68C\uC6D0\uAC00\uC785 \uC2E4\uD328 - \uBE44\uBC00\uBC88\uD638 \uB204\uB77D (400 Bad Request)")
-    void signup_validation_fail_password_null() throws Exception {
+    @DisplayName("회원가입 요청에 비밀번호가 없으면 400 Bad Request를 반환한다.")
+    void signupValidationFailPasswordNull() throws Exception {
         MemberSignupRequest invalidRequest = new MemberSignupRequest();
         ReflectionTestUtils.setField(invalidRequest, "email", "test@example.com");
-        ReflectionTestUtils.setField(invalidRequest, "nickname", "\uD14C\uC2A4\uD2B8");
+        ReflectionTestUtils.setField(invalidRequest, "nickname", "테스트");
 
         ResultActions resultActions = mockMvc.perform(post("/api/v1/members/signup")
                 .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
+                .contentType("application/json")
                 .content(objectMapper.writeValueAsString(invalidRequest)));
 
         resultActions

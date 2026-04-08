@@ -45,8 +45,8 @@ class SeatControllerTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    @DisplayName("좌석 생성 성공")
-    void createSeats_success() throws Exception {
+    @DisplayName("좌석을 생성하면 201 Created를 반환한다.")
+    void createSeatsSuccess() throws Exception {
         SeatCreateRequest request = createRequest(50, "VIP", BigDecimal.valueOf(10000));
 
         mockMvc.perform(post("/api/v1/schedules/1/seats")
@@ -59,8 +59,8 @@ class SeatControllerTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    @DisplayName("존재하지 않는 회차에는 좌석 생성 요청이 404를 반환한다")
-    void createSeats_fail_scheduleNotFound() throws Exception {
+    @DisplayName("존재하지 않는 회차에 좌석 생성을 요청하면 404 Not Found를 반환한다.")
+    void createSeatsFailScheduleNotFound() throws Exception {
         SeatCreateRequest request = createRequest(50, "VIP", BigDecimal.valueOf(10000));
 
         willThrow(new ConcertScheduleNotFoundException(ConcertErrorMessage.NOT_EXIST_SCHEDULE))
@@ -78,8 +78,8 @@ class SeatControllerTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    @DisplayName("회차 좌석 수와 요청 좌석 수가 다르면 400을 반환한다")
-    void createSeats_fail_totalSeatMismatch() throws Exception {
+    @DisplayName("회차 좌석 수와 요청 좌석 수가 다르면 400 Bad Request를 반환한다.")
+    void createSeatsFailTotalSeatMismatch() throws Exception {
         SeatCreateRequest request = createRequest(50, "VIP", BigDecimal.valueOf(10000));
 
         willThrow(new SeatBadRequestException(SEAT_COUNT_MISMATCH))
@@ -97,8 +97,8 @@ class SeatControllerTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    @DisplayName("이미 좌석이 생성된 회차면 400을 반환한다")
-    void createSeats_fail_alreadyCreated() throws Exception {
+    @DisplayName("이미 좌석이 생성된 회차에 다시 요청하면 400 Bad Request를 반환한다.")
+    void createSeatsFailAlreadyCreated() throws Exception {
         SeatCreateRequest request = createRequest(50, "VIP", BigDecimal.valueOf(10000));
 
         willThrow(new SeatBadRequestException(SEATS_ALREADY_CREATED))
@@ -116,8 +116,8 @@ class SeatControllerTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    @DisplayName("좌석 생성 요청 검증 실패 시 400을 반환한다")
-    void createSeats_validation_fail_totalSeatsNull() throws Exception {
+    @DisplayName("좌석 생성 요청 검증에 실패하면 400 Bad Request를 반환한다.")
+    void createSeatsValidationFailTotalSeatsNull() throws Exception {
         SeatCreateRequest request = new SeatCreateRequest();
         ReflectionTestUtils.setField(request, "grade", "VIP");
         ReflectionTestUtils.setField(request, "price", BigDecimal.valueOf(10000));

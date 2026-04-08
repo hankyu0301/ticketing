@@ -59,8 +59,8 @@ class ConcertCacheTest {
     }
 
     @Test
-    @DisplayName("콘서트 조회 캐싱: 첫 조회는 DB(Mapper) 호출, 두 번째는 캐시(Redis) 조회")
-    void getConcert_cache_hit() {
+    @DisplayName("콘서트를 조회하면 첫 번째 요청은 DB를 호출하고 두 번째 요청은 캐시를 조회한다.")
+    void getConcertCacheHit() {
         // given
         Long concertId = 1L;
         Concert concert = Concert.create("아이유 콘서트", "상암");
@@ -81,8 +81,8 @@ class ConcertCacheTest {
     }
 
     @Test
-    @DisplayName("스케줄 목록 캐싱: 첫 조회는 DB 호출, 두 번째는 캐시 조회")
-    void getSchedules_cache_hit() {
+    @DisplayName("스케줄 목록을 조회하면 첫 번째 요청은 DB를 호출하고 두 번째 요청은 캐시를 조회한다.")
+    void getSchedulesCacheHit() {
         // given
         Long concertId = 1L;
         ConcertSchedule schedule = ConcertSchedule.create(concertId, LocalDateTime.now(), LocalDateTime.now(), 50);
@@ -104,8 +104,8 @@ class ConcertCacheTest {
     }
 
     @Test
-    @DisplayName("스케줄 생성 시 캐시 무효화: 생성 후 다시 조회하면 DB를 호출해야 한다")
-    void createSchedule_cache_evict() {
+    @DisplayName("스케줄을 생성하면 스케줄 캐시를 무효화한다.")
+    void createScheduleCacheEvict() {
         Long concertId = 1L;
 
         ConcertScheduleCreateRequest request = new ConcertScheduleCreateRequest();

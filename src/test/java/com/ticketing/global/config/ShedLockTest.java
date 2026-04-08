@@ -56,8 +56,8 @@ class ShedLockTest {
     }
 
     @Test
-    @DisplayName("분산 환경 시뮬레이션: 다른 서버가 이미 락을 잡고 있다면, 로직은 실행되지 않아야 한다.")
-    void distributed_lock_simulation() {
+    @DisplayName("다른 서버가 이미 락을 잡고 있으면 로직은 실행되지 않는다.")
+    void distributedLockSimulation() {
         // given
         // (ShedLock 라이브러리가 기본적으로 "job-lock" 접두사를 붙임)
         String lockKey = "job-lock:ticketing-lock:QueueScheduler_processQueue";
@@ -76,8 +76,8 @@ class ShedLockTest {
     }
 
     @Test
-    @DisplayName("정상 케이스: 락이 없을 때는 로직이 실행되어야 한다.")
-    void normal_execution_test() {
+    @DisplayName("락이 없으면 로직이 실행된다.")
+    void normalExecutionTest() {
         // given
         redisTemplate.opsForSet().add(PROCESSING_SCHEDULES_KEY, "1");
 

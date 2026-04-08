@@ -43,16 +43,16 @@ class SecurityTest {
     private static final String MEMBER_LOGIN_PASSWORD = "password1234";
 
     @Autowired
-    MockMvc mockMvc;
+    private MockMvc mockMvc;
 
     @Autowired
-    WebApplicationContext context;
+    private WebApplicationContext context;
 
     @Autowired
-    MemberService memberService;
+    private MemberService memberService;
 
     @MockitoBean
-    QueueScheduler queueScheduler;
+    private QueueScheduler queueScheduler;
 
     @BeforeEach
     void beforeEach() {
@@ -64,33 +64,33 @@ class SecurityTest {
         MemberSignupRequest memberSignupRequest = new MemberSignupRequest();
         ReflectionTestUtils.setField(memberSignupRequest, "email", MEMBER_LOGIN_EMAIL);
         ReflectionTestUtils.setField(memberSignupRequest, "password", MEMBER_LOGIN_PASSWORD);
-        ReflectionTestUtils.setField(memberSignupRequest, "nickname", "\uD14C\uC2A4\uD130");
+        ReflectionTestUtils.setField(memberSignupRequest, "nickname", "테스터");
 
         memberService.signUp(memberSignupRequest);
     }
 
     @Test
-    @DisplayName("\uBE44\uD68C\uC6D0 \uAD8C\uD55C\uC73C\uB85C \uD648 \uC811\uADFC")
+    @DisplayName("비회원은 홈에 접근할 수 있다.")
     @WithAnonymousUser
-    void anonymous_authorization_home() throws Exception {
+    void anonymousAuthorizationHome() throws Exception {
         mockMvc.perform(get("/"))
                 .andDo(print())
                 .andExpect(status().isOk());
     }
 
     @Test
-    @DisplayName("\uD68C\uC6D0 \uAD8C\uD55C\uC73C\uB85C \uD648 \uC811\uADFC")
+    @DisplayName("회원은 홈에 접근할 수 있다.")
     @WithMockUser(authorities = "USER")
-    void authentication_member() throws Exception {
+    void authenticationMember() throws Exception {
         mockMvc.perform(get("/"))
                 .andDo(print())
                 .andExpect(status().isOk());
     }
 
     @Test
-    @DisplayName("\uC775\uBA85 \uC0AC\uC6A9\uC790\uB294 \uD68C\uC6D0\uAC00\uC785\uC774 \uAC00\uB2A5\uD558\uB2E4")
+    @DisplayName("익명 사용자는 회원가입할 수 있다.")
     @WithAnonymousUser
-    void anonymous_signup_success() throws Exception {
+    void anonymousSignupSuccess() throws Exception {
         mockMvc.perform(post("/api/v1/members/signup")
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -98,7 +98,7 @@ class SecurityTest {
                                 {
                                   "email": "signup@test.com",
                                   "password": "password1234",
-                                  "nickname": "\uC775\uBA85\uAC00\uC785"
+                                  "nickname": "익명가입"
                                 }
                                 """))
                 .andDo(print())
@@ -106,9 +106,9 @@ class SecurityTest {
     }
 
     @Test
-    @DisplayName("\uBE44\uC778\uC99D \uC0AC\uC6A9\uC790\uAC00 \uBCF4\uD638 API\uC5D0 \uC811\uADFC\uD558\uBA74 JSON 401\uC744 \uBC1B\uB294\uB2E4")
+    @DisplayName("비인증 사용자가 보호 API에 접근하면 JSON 401을 반환한다.")
     @WithAnonymousUser
-    void anonymous_protected_api_returns_json_unauthorized() throws Exception {
+    void anonymousProtectedApiReturnsJsonUnauthorized() throws Exception {
         mockMvc.perform(get("/api/v1/schedules/1/seats"))
                 .andDo(print())
                 .andExpect(status().isUnauthorized())
@@ -117,8 +117,8 @@ class SecurityTest {
     }
 
     @Test
-    @DisplayName("\uB85C\uADF8\uC778 \uC131\uACF5")
-    void login_success() throws Exception {
+    @DisplayName("로그인에 성공한다.")
+    void loginSuccess() throws Exception {
         mockMvc.perform(post(MEMBER_LOGIN_URL)
                         .with(csrf())
                         .param("email", MEMBER_LOGIN_EMAIL)
@@ -129,9 +129,9 @@ class SecurityTest {
     }
 
     @Test
-    @DisplayName("\uC811\uADFC \uAD8C\uD55C \uC5C6\uC74C - USER\uAC00 ADMIN \uAD8C\uD55C\uC73C\uB85C \uC811\uADFC\uD558\uBA74 JSON 403")
+    @DisplayName("USER 권한으로는 ADMIN 경로에 접근할 수 없다.")
     @WithMockUser(authorities = "USER")
-    void endpoint_with_user_authority_authorized() throws Exception {
+    void endpointWithUserAuthorityAuthorized() throws Exception {
         mockMvc.perform(get("/admin"))
                 .andDo(print())
                 .andExpect(status().isForbidden())
@@ -140,8 +140,8 @@ class SecurityTest {
     }
 
     @Test
-    @DisplayName("\uB85C\uADF8\uC778 \uC2E4\uD328 - \uBE44\uBC00\uBC88\uD638 \uBD88\uC77C\uCE58 \uC2DC JSON 401")
-    void login_fail_with_wrong_pwsd() throws Exception {
+    @DisplayName("비밀번호가 일치하지 않으면 로그인에 실패한다.")
+    void loginFailWithWrongPwsd() throws Exception {
         mockMvc.perform(post(MEMBER_LOGIN_URL)
                         .with(csrf())
                         .param("email", MEMBER_LOGIN_EMAIL)
@@ -154,8 +154,8 @@ class SecurityTest {
     }
 
     @Test
-    @DisplayName("\uB85C\uADF8\uC778 \uC2E4\uD328 - \uC874\uC7AC\uD558\uC9C0 \uC54A\uB294 \uD68C\uC6D0\uC774\uBA74 JSON 401")
-    void login_fail_not_exist() throws Exception {
+    @DisplayName("존재하지 않는 회원으로 로그인하면 실패한다.")
+    void loginFailNotExist() throws Exception {
         mockMvc.perform(post(MEMBER_LOGIN_URL)
                         .with(csrf())
                         .param("email", "no-user@test.com")
@@ -168,7 +168,7 @@ class SecurityTest {
     }
 
     @Test
-    @DisplayName("\uB85C\uADF8\uC544\uC6C3 \uC131\uACF5")
+    @DisplayName("로그아웃에 성공한다.")
     void logout() throws Exception {
         mockMvc.perform(post("/api/v1/members/logout").with(csrf()))
                 .andDo(print())
