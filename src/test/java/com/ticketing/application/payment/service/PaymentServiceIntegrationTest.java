@@ -111,7 +111,6 @@ class PaymentServiceIntegrationTest extends IntegrationTestSupport {
         assertThat(response.getStatus()).isEqualTo("PENDING");
 
         paymentMessageListener.handlePaymentRequested(new PaymentRequestedMessage(response.getPaymentId(), reservationId, memberId));
-        paymentMessageListener.handlePaymentRequested(new PaymentRequestedMessage(response.getPaymentId(), reservationId, memberId));
 
         Payment payment = paymentMapper.findById(response.getPaymentId()).orElseThrow();
         Reservation reservation = reservationMapper.findById(reservationId);
@@ -120,6 +119,23 @@ class PaymentServiceIntegrationTest extends IntegrationTestSupport {
         assertThat(payment.getStatus()).isEqualTo(Payment.PaymentStatus.COMPLETED);
         assertThat(reservation.getStatus()).isEqualTo(Reservation.ReservationStatus.CONFIRMED);
         assertThat(seat.getStatus()).isEqualTo(Seat.SeatStatus.SOLD_OUT);
+    }
+
+    @Test
+    @DisplayName("중복 결제 메시지가 와도 비동기 결제는 한 번만 완료된다.")
+    void requestAsyncIgnoresDuplicateMessage() {
+        Long reservationId = createReservation(memberId);
+
+        PaymentResponse response = paymentService.requestAsync(memberId, reservationId);
+
+        paymentMessageListener.handlePaymentRequested(new PaymentRequestedMessage(response.getPaymentId(), reservationId, memberId));
+        Payment completed = paymentMapper.findById(response.getPaymentId()).orElseThrow();
+
+        paymentMessageListener.handlePaymentRequested(new PaymentRequestedMessage(response.getPaymentId(), reservationId, memberId));
+        Payment reloaded = paymentMapper.findById(response.getPaymentId()).orElseThrow();
+
+        assertThat(reloaded.getStatus()).isEqualTo(Payment.PaymentStatus.COMPLETED);
+        assertThat(reloaded.getPaidAt()).isEqualTo(completed.getPaidAt());
     }
 
     @Test
