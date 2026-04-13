@@ -32,14 +32,19 @@ public class PaymentService {
     private final ReservationMapper reservationMapper;
     private final SeatMapper seatMapper;
     private final PaymentMapper paymentMapper;
-    private final PaymentProcessor paymentProcessor;
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public PaymentResponse requestSync(Long memberId, Long reservationId) {
-        Payment payment = preparePayment(memberId, reservationId);
-        Payment completed = paymentProcessor.complete(payment.getPaymentId());
-        return new PaymentResponse(completed);
+        Reservation reservation = findReservationForPayment(reservationId);
+        Seat seat = findSeatForPayment(reservation.getSeatId());
+
+        validatePayable(reservation, seat, memberId);
+
+        Payment payment = findOrCreatePayment(memberId, reservation, seat);
+        completeSyncPayment(payment, reservation, seat);
+
+        return new PaymentResponse(payment);
     }
 
     @Transactional
@@ -62,25 +67,37 @@ public class PaymentService {
     }
 
     private Payment preparePayment(Long memberId, Long reservationId) {
+        Reservation reservation = findReservationForPayment(reservationId);
+        Seat seat = findSeatForPayment(reservation.getSeatId());
+
+        validatePayable(reservation, seat, memberId);
+
+        return findOrCreatePayment(memberId, reservation, seat);
+    }
+
+    private Reservation findReservationForPayment(Long reservationId) {
         Reservation reservation = reservationMapper.findByIdForUpdate(reservationId);
         if (reservation == null) {
             throw new PaymentNotFoundException(NOT_EXIST_RESERVATION);
         }
+        return reservation;
+    }
 
-        Seat seat = seatMapper.findById(reservation.getSeatId())
+    private Seat findSeatForPayment(Long seatId) {
+        return seatMapper.findById(seatId)
                 .orElseThrow(() -> new SeatNotFoundException(NOT_EXIST_SEAT));
-
-        validatePayable(reservation, seat, memberId);
-
-        return paymentMapper.findByReservationId(reservationId)
-                .map(existing -> reuseOrReject(existing))
-                .orElseGet(() -> createPendingPayment(reservation, memberId, seat));
     }
 
     private void validatePayable(Reservation reservation, Seat seat, Long memberId) {
         if (!reservation.canBePaidBy(memberId, now()) || !seat.isTemporarilyHeldBy(memberId)) {
             throw new PaymentBadRequestException(PAYMENT_NOT_ALLOWED);
         }
+    }
+
+    private Payment findOrCreatePayment(Long memberId, Reservation reservation, Seat seat) {
+        return paymentMapper.findByReservationId(reservation.getReservationId())
+                .map(this::reuseOrReject)
+                .orElseGet(() -> createPendingPayment(reservation, memberId, seat));
     }
 
     private Payment reuseOrReject(Payment existingPayment) {
@@ -100,5 +117,15 @@ public class PaymentService {
         Payment payment = Payment.create(reservation.getReservationId(), memberId, seat.getPrice());
         paymentMapper.save(payment);
         return payment;
+    }
+
+    private void completeSyncPayment(Payment payment, Reservation reservation, Seat seat) {
+        payment.complete(now());
+        reservation.confirm();
+        seat.sellOut(payment.getMemberId());
+
+        paymentMapper.update(payment);
+        reservationMapper.update(reservation);
+        seatMapper.update(seat);
     }
 }

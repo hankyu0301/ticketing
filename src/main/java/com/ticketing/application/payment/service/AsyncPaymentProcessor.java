@@ -20,7 +20,7 @@ import static com.ticketing.domain.payment.exception.PaymentErrorMessage.NOT_EXI
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class PaymentProcessor {
+public class AsyncPaymentProcessor {
 
     private final PaymentMapper paymentMapper;
     private final ReservationMapper reservationMapper;
