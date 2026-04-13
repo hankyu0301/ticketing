@@ -4,6 +4,7 @@ import com.ticketing.global.common.BaseEntity;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -43,5 +44,23 @@ public class Reservation extends BaseEntity {
                 .reservedAt(reservedAt)
                 .expiredAt(expiredAt)
                 .build();
+    }
+
+    public void confirm() {
+        this.status = ReservationStatus.CONFIRMED;
+    }
+
+    public void cancel() {
+        this.status = ReservationStatus.CANCELLED;
+    }
+
+    public boolean isExpired(LocalDateTime now) {
+        return expiredAt != null && !expiredAt.isAfter(now);
+    }
+
+    public boolean canBePaidBy(Long memberId, LocalDateTime now) {
+        return status == ReservationStatus.PENDING
+                && Objects.equals(this.memberId, memberId)
+                && !isExpired(now);
     }
 }

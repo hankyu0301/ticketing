@@ -9,6 +9,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.util.Objects;
 
 @Getter
 @Builder
@@ -52,5 +53,19 @@ public class Seat extends BaseEntity {
         }
         this.status = SeatStatus.TEMPORARY;
         this.memberId = memberId;
+    }
+
+    public void sellOut(Long memberId) {
+        this.status = SeatStatus.SOLD_OUT;
+        this.memberId = memberId;
+    }
+
+    public void release() {
+        this.status = SeatStatus.AVAILABLE;
+        this.memberId = null;
+    }
+
+    public boolean isTemporarilyHeldBy(Long memberId) {
+        return status == SeatStatus.TEMPORARY && Objects.equals(this.memberId, memberId);
     }
 }

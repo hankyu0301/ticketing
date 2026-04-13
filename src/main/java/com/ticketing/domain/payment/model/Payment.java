@@ -22,7 +22,32 @@ public class Payment extends BaseEntity {
     private PaymentStatus status;
     private LocalDateTime paidAt;
 
+    public static Payment create(Long reservationId, Long memberId, BigDecimal amount) {
+        return Payment.builder()
+                .reservationId(reservationId)
+                .memberId(memberId)
+                .amount(amount)
+                .status(PaymentStatus.PENDING)
+                .paidAt(null)
+                .build();
+    }
+
+    public void complete(LocalDateTime paidAt) {
+        this.status = PaymentStatus.COMPLETED;
+        this.paidAt = paidAt;
+    }
+
+    public void fail() {
+        this.status = PaymentStatus.FAILED;
+        this.paidAt = null;
+    }
+
+    public void resetPending() {
+        this.status = PaymentStatus.PENDING;
+        this.paidAt = null;
+    }
+
     public enum PaymentStatus {
-        COMPLETED, FAILED, REFUNDED
+        PENDING, COMPLETED, FAILED, REFUNDED
     }
 }

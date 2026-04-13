@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ticketing.infrastructure.persistence.payment.PaymentMapper">
+
+    <insert id="save" useGeneratedKeys="true" keyProperty="paymentId">
+        INSERT INTO payments
+        (reservation_id, member_id, amount, status, paid_at, created_at, updated_at)
+        VALUES
+            (#{reservationId}, #{memberId}, #{amount}, #{status}, #{paidAt}, NOW(), NOW())
+    </insert>
+
+    <select id="findById" resultType="com.ticketing.domain.payment.model.Payment">
+        SELECT payment_id, reservation_id, member_id, amount, status, paid_at, created_at, updated_at
+        FROM payments
+        WHERE payment_id = #{paymentId}
+    </select>
+
+    <select id="findReservationIdByPaymentId" resultType="long">
+        SELECT reservation_id
+        FROM payments
+        WHERE payment_id = #{paymentId}
+    </select>
+
+    <select id="findByReservationId" resultType="com.ticketing.domain.payment.model.Payment">
+        SELECT payment_id, reservation_id, member_id, amount, status, paid_at, created_at, updated_at
+        FROM payments
+        WHERE reservation_id = #{reservationId}
+    </select>
+
+    <update id="update">
+        UPDATE payments
+        SET status = #{status},
+            paid_at = #{paidAt},
+            updated_at = NOW()
+        WHERE payment_id = #{paymentId}
+    </update>
+</mapper>
