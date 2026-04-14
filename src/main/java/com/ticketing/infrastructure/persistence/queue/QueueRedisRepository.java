@@ -8,6 +8,8 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -24,12 +26,39 @@ public class QueueRedisRepository {
     private final RedisScript<Long> cleanupProcessingScheduleScript;
 
     private static final String PROCESSING_SCHEDULES_KEY = "queue:processing_schedules";
+    private static final String META_RESERVATION_OPEN_AT = "reservationOpenAtMs";
+    private static final String META_CONCERT_DATE = "concertDateMs";
 
     @Value("${queue.safety-ttl-days:7}")
     private long safetyTtlDays;
 
     @Value("${queue.active-time-ms:300000}")
     private long activeTimeMs;
+
+    public void saveScheduleMeta(Long scheduleId, long reservationOpenAtMs, long concertDateMs) {
+        redisTemplate.opsForHash().putAll(
+                getMetaKey(scheduleId),
+                Map.of(
+                        META_RESERVATION_OPEN_AT, String.valueOf(reservationOpenAtMs),
+                        META_CONCERT_DATE, String.valueOf(concertDateMs)
+                )
+        );
+    }
+
+    public Optional<QueueScheduleMeta> findScheduleMeta(Long scheduleId) {
+        Object reservationOpenAt = redisTemplate.opsForHash().get(getMetaKey(scheduleId), META_RESERVATION_OPEN_AT);
+        Object concertDate = redisTemplate.opsForHash().get(getMetaKey(scheduleId), META_CONCERT_DATE);
+
+        if (reservationOpenAt == null || concertDate == null) {
+            return Optional.empty();
+        }
+
+        return Optional.of(new QueueScheduleMeta(
+                scheduleId,
+                Long.parseLong(reservationOpenAt.toString()),
+                Long.parseLong(concertDate.toString())
+        ));
+    }
 
     public Long register(Long scheduleId, Long memberId, long maxActive, long activeTimeMs) {
         String waitKey = getWaitKey(scheduleId);
@@ -155,5 +184,9 @@ public class QueueRedisRepository {
 
     private String getScoreKey(Long scheduleId) {
         return "queue:{" + scheduleId + "}:score";
+    }
+
+    private String getMetaKey(Long scheduleId) {
+        return "queue:{" + scheduleId + "}:meta";
     }
 }
