@@ -42,6 +42,20 @@ class QueueRedisTest {
     }
 
     @Test
+    @DisplayName("queue meta hash를 저장하고 다시 조회한다.")
+    void saveAndFindScheduleMeta() {
+        long now = System.currentTimeMillis();
+
+        queueRedisRepository.saveScheduleMeta(SCHEDULE_ID, now - 1_000, now + 60_000);
+
+        QueueScheduleMeta meta = queueRedisRepository.findScheduleMeta(SCHEDULE_ID).orElseThrow();
+
+        assertThat(meta.scheduleId()).isEqualTo(SCHEDULE_ID);
+        assertThat(meta.reservationOpenAtMs()).isEqualTo(now - 1_000);
+        assertThat(meta.concertDateMs()).isEqualTo(now + 60_000);
+    }
+
+    @Test
     @DisplayName("active가 비어 있으면 대기 없이 즉시 입장한다.")
     void logicEnterFreePass() {
         Long memberId = 100L;

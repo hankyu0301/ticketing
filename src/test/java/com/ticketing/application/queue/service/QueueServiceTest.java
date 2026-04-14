@@ -1,16 +1,14 @@
 package com.ticketing.application.queue.service;
 
 import com.ticketing.api.queue.dto.QueueResponse;
-import com.ticketing.application.queue.service.QueueService;
 import com.ticketing.domain.concert.exception.ConcertErrorMessage;
 import com.ticketing.domain.concert.exception.ConcertScheduleNotFoundException;
-import com.ticketing.domain.concert.model.ConcertSchedule;
 import com.ticketing.global.common.exception.queue.QueueBadRequestException;
 import com.ticketing.global.common.exception.queue.QueueConfigException;
 import com.ticketing.global.common.exception.queue.QueueErrorMessage;
 import com.ticketing.global.common.exception.queue.QueueNotFoundException;
-import com.ticketing.infrastructure.persistence.concert.ConcertScheduleMapper;
 import com.ticketing.infrastructure.persistence.queue.QueueRedisRepository;
+import com.ticketing.infrastructure.persistence.queue.QueueScheduleMeta;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,13 +18,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class QueueServiceTest {
@@ -38,7 +36,7 @@ class QueueServiceTest {
     private QueueRedisRepository queueRedisRepository;
 
     @Mock
-    private ConcertScheduleMapper concertScheduleMapper;
+    private QueueScheduleMetaLoader queueScheduleMetaLoader;
 
     @BeforeEach
     void setUp() {
@@ -46,12 +44,12 @@ class QueueServiceTest {
         ReflectionTestUtils.setField(queueService, "maxActiveMember", 1000L);
         ReflectionTestUtils.setField(queueService, "activeTimeMs", 300000L);
 
-        given(concertScheduleMapper.findById(anyLong()))
-                .willReturn(Optional.of(openedSchedule()));
+        given(queueScheduleMetaLoader.getOrLoad(anyLong()))
+                .willReturn(Optional.of(openedScheduleMeta()));
     }
 
     @Test
-    @DisplayName("대기열에 즉시 입장하면 entered=true를 반환한다.")
+    @DisplayName("대기열 즉시 입장이면 entered=true를 반환한다.")
     void enterQueueFreePass() {
         given(queueRedisRepository.register(anyLong(), anyLong(), anyLong(), anyLong()))
                 .willReturn(-100L);
@@ -60,6 +58,7 @@ class QueueServiceTest {
 
         assertThat(response.isEntered()).isTrue();
         assertThat(response.getRank()).isEqualTo(0L);
+        verify(queueRedisRepository).addProcessingSchedule(1L);
     }
 
     @Test
@@ -72,12 +71,13 @@ class QueueServiceTest {
 
         assertThat(response.getRank()).isEqualTo(5L);
         assertThat(response.getRetryAfter()).isEqualTo(1L);
+        verify(queueRedisRepository).addProcessingSchedule(1L);
     }
 
     @Test
-    @DisplayName("존재하지 않는 회차에는 대기열에 진입할 수 없다.")
+    @DisplayName("존재하지 않는 스케줄이면 대기열에 진입할 수 없다.")
     void enterQueueFailScheduleNotFound() {
-        given(concertScheduleMapper.findById(anyLong())).willReturn(Optional.empty());
+        given(queueScheduleMetaLoader.getOrLoad(anyLong())).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> queueService.enterQueue(999L, 1L))
                 .isInstanceOf(ConcertScheduleNotFoundException.class)
@@ -87,8 +87,8 @@ class QueueServiceTest {
     @Test
     @DisplayName("예매 오픈 전에는 대기열에 진입할 수 없다.")
     void enterQueueFailBeforeReservationOpen() {
-        given(concertScheduleMapper.findById(anyLong()))
-                .willReturn(Optional.of(notOpenedSchedule()));
+        given(queueScheduleMetaLoader.getOrLoad(anyLong()))
+                .willReturn(Optional.of(notOpenedScheduleMeta()));
 
         assertThatThrownBy(() -> queueService.enterQueue(1L, 1L))
                 .isInstanceOf(QueueBadRequestException.class)
@@ -96,7 +96,7 @@ class QueueServiceTest {
     }
 
     @Test
-    @DisplayName("Redis 결과가 비정상이면 대기열 진입에 실패한다.")
+    @DisplayName("Redis 결과가 비정상이면 대기열 진입은 실패한다.")
     void enterQueueFailError() {
         given(queueRedisRepository.register(anyLong(), anyLong(), anyLong(), anyLong()))
                 .willReturn(-1L);
@@ -132,7 +132,7 @@ class QueueServiceTest {
     }
 
     @Test
-    @DisplayName("대기 시간이 상한을 넘으면 60초로 제한한다.")
+    @DisplayName("대기 시간의 상한은 60초로 제한한다.")
     void getQueueStatusWaitingMaxRetryTime() {
         given(queueRedisRepository.getRank(anyLong(), anyLong()))
                 .willReturn(4999L);
@@ -143,9 +143,9 @@ class QueueServiceTest {
     }
 
     @Test
-    @DisplayName("존재하지 않는 회차의 상태는 조회할 수 없다.")
+    @DisplayName("존재하지 않는 스케줄 상태는 조회할 수 없다.")
     void getQueueStatusFailScheduleNotFound() {
-        given(concertScheduleMapper.findById(anyLong())).willReturn(Optional.empty());
+        given(queueScheduleMetaLoader.getOrLoad(anyLong())).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> queueService.getQueueStatus(999L, 1L))
                 .isInstanceOf(ConcertScheduleNotFoundException.class)
@@ -173,21 +173,23 @@ class QueueServiceTest {
                 .hasMessage(QueueErrorMessage.INVALID_ESTIMATED_THROUGHPUT);
     }
 
-    private ConcertSchedule openedSchedule() {
-        return ConcertSchedule.create(
-                1L,
-                LocalDateTime.now().plusDays(1),
-                LocalDateTime.now().minusMinutes(1),
-                100
-        );
+    @Test
+    @DisplayName("queue 검증은 meta loader를 통해 수행한다.")
+    void validateSchedulableUsesMetaLoader() {
+        given(queueRedisRepository.getRank(anyLong(), anyLong())).willReturn(1L);
+
+        queueService.getQueueStatus(1L, 1L);
+
+        verify(queueScheduleMetaLoader).getOrLoad(1L);
     }
 
-    private ConcertSchedule notOpenedSchedule() {
-        return ConcertSchedule.create(
-                1L,
-                LocalDateTime.now().plusDays(1),
-                LocalDateTime.now().plusMinutes(10),
-                100
-        );
+    private QueueScheduleMeta openedScheduleMeta() {
+        long now = System.currentTimeMillis();
+        return new QueueScheduleMeta(1L, now - 60_000, now + 86_400_000);
+    }
+
+    private QueueScheduleMeta notOpenedScheduleMeta() {
+        long now = System.currentTimeMillis();
+        return new QueueScheduleMeta(1L, now + 600_000, now + 86_400_000);
     }
 }
