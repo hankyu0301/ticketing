@@ -3,20 +3,17 @@ package com.ticketing.application.queue.service;
 import com.ticketing.api.queue.dto.QueueResponse;
 import com.ticketing.domain.concert.exception.ConcertErrorMessage;
 import com.ticketing.domain.concert.exception.ConcertScheduleNotFoundException;
-import com.ticketing.domain.concert.model.ConcertSchedule;
 import com.ticketing.global.common.exception.queue.QueueBadRequestException;
 import com.ticketing.global.common.exception.queue.QueueConfigException;
 import com.ticketing.global.common.exception.queue.QueueErrorMessage;
 import com.ticketing.global.common.exception.queue.QueueNotFoundException;
-import com.ticketing.infrastructure.persistence.concert.ConcertScheduleMapper;
 import com.ticketing.infrastructure.persistence.queue.QueueRedisRepository;
+import com.ticketing.infrastructure.persistence.queue.QueueScheduleMeta;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-
-import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -24,7 +21,7 @@ import java.time.LocalDateTime;
 public class QueueService {
 
     private final QueueRedisRepository queueRedisRepository;
-    private final ConcertScheduleMapper concertScheduleMapper;
+    private final QueueScheduleMetaLoader queueScheduleMetaLoader;
 
     @Value("${queue.estimated-throughput:50}")
     private long estimatedThroughput;
@@ -114,10 +111,10 @@ public class QueueService {
     }
 
     private void validateSchedulable(Long scheduleId) {
-        ConcertSchedule schedule = concertScheduleMapper.findById(scheduleId)
+        QueueScheduleMeta scheduleMeta = queueScheduleMetaLoader.getOrLoad(scheduleId)
                 .orElseThrow(() -> new ConcertScheduleNotFoundException(ConcertErrorMessage.NOT_EXIST_SCHEDULE));
 
-        if (schedule.getReservationOpenAt().isAfter(LocalDateTime.now())) {
+        if (scheduleMeta.reservationOpenAtMs() > System.currentTimeMillis()) {
             throw new QueueBadRequestException(QueueErrorMessage.RESERVATION_NOT_OPEN);
         }
     }
