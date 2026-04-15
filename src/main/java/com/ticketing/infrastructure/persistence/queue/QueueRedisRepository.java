@@ -64,13 +64,14 @@ public class QueueRedisRepository {
         String waitKey = getWaitKey(scheduleId);
         String activeKey = getActiveKey(scheduleId);
         String scoreKey = getScoreKey(scheduleId);
+        String metaKey = getMetaKey(scheduleId);
         long now = System.currentTimeMillis();
         long expireAt = now + activeTimeMs;
         long ttlSeconds = safetyTtlDays * 24 * 60 * 60;
 
         return redisTemplate.execute(
                 queueEnterScript,
-                List.of(waitKey, activeKey, scoreKey),
+                List.of(waitKey, activeKey, scoreKey, metaKey),
                 memberId.toString(),
                 String.valueOf(maxActive),
                 String.valueOf(expireAt),
@@ -82,10 +83,11 @@ public class QueueRedisRepository {
     public Long getRank(Long scheduleId, Long memberId) {
         String waitKey = getWaitKey(scheduleId);
         String activeKey = getActiveKey(scheduleId);
+        String metaKey = getMetaKey(scheduleId);
 
         Long rank = redisTemplate.execute(
                 queueStatusScript,
-                List.of(waitKey, activeKey),
+                List.of(waitKey, activeKey, metaKey),
                 memberId.toString(),
                 String.valueOf(System.currentTimeMillis())
         );
