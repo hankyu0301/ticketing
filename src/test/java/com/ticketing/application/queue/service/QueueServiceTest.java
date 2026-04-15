@@ -1,16 +1,14 @@
 package com.ticketing.application.queue.service;
 
 import com.ticketing.api.queue.dto.QueueResponse;
-import com.ticketing.application.queue.service.QueueService;
 import com.ticketing.domain.concert.exception.ConcertErrorMessage;
 import com.ticketing.domain.concert.exception.ConcertScheduleNotFoundException;
-import com.ticketing.domain.concert.model.ConcertSchedule;
 import com.ticketing.global.common.exception.queue.QueueBadRequestException;
 import com.ticketing.global.common.exception.queue.QueueConfigException;
 import com.ticketing.global.common.exception.queue.QueueErrorMessage;
 import com.ticketing.global.common.exception.queue.QueueNotFoundException;
-import com.ticketing.infrastructure.persistence.concert.ConcertScheduleMapper;
 import com.ticketing.infrastructure.persistence.queue.QueueRedisRepository;
+import com.ticketing.infrastructure.persistence.queue.QueueScheduleMeta;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,13 +18,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class QueueServiceTest {
@@ -38,20 +37,17 @@ class QueueServiceTest {
     private QueueRedisRepository queueRedisRepository;
 
     @Mock
-    private ConcertScheduleMapper concertScheduleMapper;
+    private QueueScheduleMetaLoader queueScheduleMetaLoader;
 
     @BeforeEach
     void setUp() {
         ReflectionTestUtils.setField(queueService, "estimatedThroughput", 50L);
         ReflectionTestUtils.setField(queueService, "maxActiveMember", 1000L);
         ReflectionTestUtils.setField(queueService, "activeTimeMs", 300000L);
-
-        given(concertScheduleMapper.findById(anyLong()))
-                .willReturn(Optional.of(openedSchedule()));
     }
 
     @Test
-    @DisplayName("대기열에 즉시 입장하면 entered=true를 반환한다.")
+    @DisplayName("warm path immediate entry는 loader 없이 바로 처리한다")
     void enterQueueFreePass() {
         given(queueRedisRepository.register(anyLong(), anyLong(), anyLong(), anyLong()))
                 .willReturn(-100L);
@@ -60,10 +56,12 @@ class QueueServiceTest {
 
         assertThat(response.isEntered()).isTrue();
         assertThat(response.getRank()).isEqualTo(0L);
+        verify(queueScheduleMetaLoader, never()).getOrLoad(anyLong());
+        verify(queueRedisRepository, never()).addProcessingSchedule(anyLong());
     }
 
     @Test
-    @DisplayName("대기열에 등록되면 순번과 재시도 시간을 반환한다.")
+    @DisplayName("warm path waiting entry는 rank를 반환하고 processing schedule을 추가한다")
     void enterQueueWaiting() {
         given(queueRedisRepository.register(anyLong(), anyLong(), anyLong(), anyLong()))
                 .willReturn(4L);
@@ -72,12 +70,30 @@ class QueueServiceTest {
 
         assertThat(response.getRank()).isEqualTo(5L);
         assertThat(response.getRetryAfter()).isEqualTo(1L);
+        verify(queueScheduleMetaLoader, never()).getOrLoad(anyLong());
+        verify(queueRedisRepository).addProcessingSchedule(1L);
     }
 
     @Test
-    @DisplayName("존재하지 않는 회차에는 대기열에 진입할 수 없다.")
+    @DisplayName("meta miss면 loader로 복구한 뒤 다시 queue entry를 시도한다")
+    void enterQueueRecoversMetaOnMiss() {
+        given(queueRedisRepository.register(anyLong(), anyLong(), anyLong(), anyLong()))
+                .willReturn(-2L, 4L);
+        given(queueScheduleMetaLoader.getOrLoad(1L)).willReturn(Optional.of(openedScheduleMeta()));
+
+        QueueResponse response = queueService.enterQueue(1L, 1L);
+
+        assertThat(response.getRank()).isEqualTo(5L);
+        verify(queueScheduleMetaLoader).getOrLoad(1L);
+        verify(queueRedisRepository).addProcessingSchedule(1L);
+    }
+
+    @Test
+    @DisplayName("meta miss 복구에 실패하면 스케줄 없음 예외를 반환한다")
     void enterQueueFailScheduleNotFound() {
-        given(concertScheduleMapper.findById(anyLong())).willReturn(Optional.empty());
+        given(queueRedisRepository.register(anyLong(), anyLong(), anyLong(), anyLong()))
+                .willReturn(-2L);
+        given(queueScheduleMetaLoader.getOrLoad(anyLong())).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> queueService.enterQueue(999L, 1L))
                 .isInstanceOf(ConcertScheduleNotFoundException.class)
@@ -85,10 +101,10 @@ class QueueServiceTest {
     }
 
     @Test
-    @DisplayName("예매 오픈 전에는 대기열에 진입할 수 없다.")
+    @DisplayName("reservation not open 코드가 오면 예외로 매핑한다")
     void enterQueueFailBeforeReservationOpen() {
-        given(concertScheduleMapper.findById(anyLong()))
-                .willReturn(Optional.of(notOpenedSchedule()));
+        given(queueRedisRepository.register(anyLong(), anyLong(), anyLong(), anyLong()))
+                .willReturn(-3L);
 
         assertThatThrownBy(() -> queueService.enterQueue(1L, 1L))
                 .isInstanceOf(QueueBadRequestException.class)
@@ -96,7 +112,7 @@ class QueueServiceTest {
     }
 
     @Test
-    @DisplayName("Redis 결과가 비정상이면 대기열 진입에 실패한다.")
+    @DisplayName("queue entry 결과가 not found면 queue 예외를 반환한다")
     void enterQueueFailError() {
         given(queueRedisRepository.register(anyLong(), anyLong(), anyLong(), anyLong()))
                 .willReturn(-1L);
@@ -107,7 +123,7 @@ class QueueServiceTest {
     }
 
     @Test
-    @DisplayName("active 사용자의 상태를 조회하면 entered=true를 반환한다.")
+    @DisplayName("warm path active status는 loader 없이 바로 처리한다")
     void getQueueStatusActive() {
         given(queueRedisRepository.getRank(anyLong(), anyLong()))
                 .willReturn(-100L);
@@ -116,10 +132,11 @@ class QueueServiceTest {
 
         assertThat(response.isEntered()).isTrue();
         assertThat(response.getRank()).isEqualTo(0L);
+        verify(queueScheduleMetaLoader, never()).getOrLoad(anyLong());
     }
 
     @Test
-    @DisplayName("waiting 사용자의 상태를 조회하면 순번과 재시도 시간을 반환한다.")
+    @DisplayName("warm path waiting status는 rank와 retryAfter를 반환한다")
     void getQueueStatusWaiting() {
         given(queueRedisRepository.getRank(anyLong(), anyLong()))
                 .willReturn(49L);
@@ -129,23 +146,27 @@ class QueueServiceTest {
         assertThat(response.isEntered()).isFalse();
         assertThat(response.getRank()).isEqualTo(50L);
         assertThat(response.getRetryAfter()).isEqualTo(1L);
+        verify(queueScheduleMetaLoader, never()).getOrLoad(anyLong());
     }
 
     @Test
-    @DisplayName("대기 시간이 상한을 넘으면 60초로 제한한다.")
-    void getQueueStatusWaitingMaxRetryTime() {
+    @DisplayName("queue status에서 meta miss면 loader로 복구 후 재조회한다")
+    void getQueueStatusRecoversMetaOnMiss() {
         given(queueRedisRepository.getRank(anyLong(), anyLong()))
-                .willReturn(4999L);
+                .willReturn(-2L, 49L);
+        given(queueScheduleMetaLoader.getOrLoad(1L)).willReturn(Optional.of(openedScheduleMeta()));
 
         QueueResponse response = queueService.getQueueStatus(1L, 1L);
 
-        assertThat(response.getRetryAfter()).isEqualTo(60L);
+        assertThat(response.getRank()).isEqualTo(50L);
+        verify(queueScheduleMetaLoader).getOrLoad(1L);
     }
 
     @Test
-    @DisplayName("존재하지 않는 회차의 상태는 조회할 수 없다.")
+    @DisplayName("queue status에서 meta miss 복구에 실패하면 스케줄 없음 예외를 반환한다")
     void getQueueStatusFailScheduleNotFound() {
-        given(concertScheduleMapper.findById(anyLong())).willReturn(Optional.empty());
+        given(queueRedisRepository.getRank(anyLong(), anyLong())).willReturn(-2L);
+        given(queueScheduleMetaLoader.getOrLoad(anyLong())).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> queueService.getQueueStatus(999L, 1L))
                 .isInstanceOf(ConcertScheduleNotFoundException.class)
@@ -153,7 +174,17 @@ class QueueServiceTest {
     }
 
     @Test
-    @DisplayName("존재하지 않는 queue 상태는 조회할 수 없다.")
+    @DisplayName("queue status에서 reservation not open 코드를 예외로 매핑한다")
+    void getQueueStatusFailBeforeReservationOpen() {
+        given(queueRedisRepository.getRank(anyLong(), anyLong())).willReturn(-3L);
+
+        assertThatThrownBy(() -> queueService.getQueueStatus(1L, 1L))
+                .isInstanceOf(QueueBadRequestException.class)
+                .hasMessage(QueueErrorMessage.RESERVATION_NOT_OPEN);
+    }
+
+    @Test
+    @DisplayName("queue status 결과가 not found면 queue 예외를 반환한다")
     void getQueueStatusFailNotFound() {
         given(queueRedisRepository.getRank(anyLong(), anyLong())).willReturn(-1L);
 
@@ -163,7 +194,17 @@ class QueueServiceTest {
     }
 
     @Test
-    @DisplayName("처리량 설정이 잘못되면 상태를 조회할 수 없다.")
+    @DisplayName("retryAfter는 최대 60초로 제한한다")
+    void getQueueStatusWaitingMaxRetryTime() {
+        given(queueRedisRepository.getRank(anyLong(), anyLong())).willReturn(4999L);
+
+        QueueResponse response = queueService.getQueueStatus(1L, 1L);
+
+        assertThat(response.getRetryAfter()).isEqualTo(60L);
+    }
+
+    @Test
+    @DisplayName("estimated throughput이 0이면 상태를 계산할 수 없다")
     void getQueueStatusFailInvalidEstimatedThroughput() {
         ReflectionTestUtils.setField(queueService, "estimatedThroughput", 0L);
         given(queueRedisRepository.getRank(anyLong(), anyLong())).willReturn(1L);
@@ -173,21 +214,8 @@ class QueueServiceTest {
                 .hasMessage(QueueErrorMessage.INVALID_ESTIMATED_THROUGHPUT);
     }
 
-    private ConcertSchedule openedSchedule() {
-        return ConcertSchedule.create(
-                1L,
-                LocalDateTime.now().plusDays(1),
-                LocalDateTime.now().minusMinutes(1),
-                100
-        );
-    }
-
-    private ConcertSchedule notOpenedSchedule() {
-        return ConcertSchedule.create(
-                1L,
-                LocalDateTime.now().plusDays(1),
-                LocalDateTime.now().plusMinutes(10),
-                100
-        );
+    private QueueScheduleMeta openedScheduleMeta() {
+        long now = System.currentTimeMillis();
+        return new QueueScheduleMeta(1L, now - 60_000, now + 86_400_000);
     }
 }

@@ -1,6 +1,5 @@
 package com.ticketing.infrastructure.persistence.queue;
 
-import com.ticketing.infrastructure.persistence.queue.QueueRedisRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,10 +38,57 @@ class QueueRedisTest {
     @BeforeEach
     void setUp() {
         redisTemplate.getConnectionFactory().getConnection().serverCommands().flushAll();
+        saveOpenedScheduleMeta();
     }
 
     @Test
-    @DisplayName("active가 비어 있으면 대기 없이 즉시 입장한다.")
+    @DisplayName("queue meta hash를 저장하고 다시 조회한다")
+    void saveAndFindScheduleMeta() {
+        long now = System.currentTimeMillis();
+
+        queueRedisRepository.saveScheduleMeta(SCHEDULE_ID, now - 1_000, now + 60_000);
+
+        QueueScheduleMeta meta = queueRedisRepository.findScheduleMeta(SCHEDULE_ID).orElseThrow();
+
+        assertThat(meta.scheduleId()).isEqualTo(SCHEDULE_ID);
+        assertThat(meta.reservationOpenAtMs()).isEqualTo(now - 1_000);
+        assertThat(meta.concertDateMs()).isEqualTo(now + 60_000);
+    }
+
+    @Test
+    @DisplayName("meta가 없으면 enter script는 meta missing 코드를 반환한다")
+    void logicEnterFailsWhenMetaMissing() {
+        redisTemplate.delete(getMetaKey());
+
+        Long result = queueRedisRepository.register(SCHEDULE_ID, 100L, TEST_MAX_ACTIVE, 300000);
+
+        assertThat(result).isEqualTo(-2L);
+    }
+
+    @Test
+    @DisplayName("예매 오픈 전이면 enter script는 reservation not open 코드를 반환한다")
+    void logicEnterFailsWhenReservationNotOpen() {
+        long now = System.currentTimeMillis();
+        queueRedisRepository.saveScheduleMeta(SCHEDULE_ID, now + 60_000, now + 86_400_000);
+
+        Long result = queueRedisRepository.register(SCHEDULE_ID, 100L, TEST_MAX_ACTIVE, 300000);
+
+        assertThat(result).isEqualTo(-3L);
+    }
+
+    @Test
+    @DisplayName("예매 오픈 전이면 status script는 reservation not open 코드를 반환한다")
+    void logicStatusFailsWhenReservationNotOpen() {
+        long now = System.currentTimeMillis();
+        queueRedisRepository.saveScheduleMeta(SCHEDULE_ID, now + 60_000, now + 86_400_000);
+
+        Long result = queueRedisRepository.getRank(SCHEDULE_ID, 100L);
+
+        assertThat(result).isEqualTo(-3L);
+    }
+
+    @Test
+    @DisplayName("active가 비어 있으면 대기 없이 즉시 입장한다")
     void logicEnterFreePass() {
         Long memberId = 100L;
 
@@ -53,7 +99,7 @@ class QueueRedisTest {
     }
 
     @Test
-    @DisplayName("이미 active인 사용자는 재진입해도 active 상태를 유지하고 대기열에 중복 등록되지 않는다.")
+    @DisplayName("이미 active인 사용자는 즉시 입장 상태를 유지한다")
     void logicEnterActiveMemberAgain() {
         Long memberId = 100L;
         queueRedisRepository.register(SCHEDULE_ID, memberId, TEST_MAX_ACTIVE, 300000);
@@ -66,7 +112,7 @@ class QueueRedisTest {
     }
 
     @Test
-    @DisplayName("active가 가득 차면 사용자는 대기열에 들어가고 순번을 받는다.")
+    @DisplayName("active가 가득 차면 waiting queue에 넣고 rank를 반환한다")
     void logicEnterWait() {
         for (long i = 1; i <= TEST_MAX_ACTIVE; i++) {
             queueRedisRepository.register(SCHEDULE_ID, i, TEST_MAX_ACTIVE, 300000);
@@ -80,7 +126,7 @@ class QueueRedisTest {
     }
 
     @Test
-    @DisplayName("이미 대기열에 있는 사용자는 재진입해도 기존 순번을 반환하고 중복 등록되지 않는다.")
+    @DisplayName("이미 waiting에 있는 사용자는 기존 rank를 유지한다")
     void logicEnterWaitingMemberAgain() {
         for (long i = 1; i <= TEST_MAX_ACTIVE; i++) {
             queueRedisRepository.register(SCHEDULE_ID, i, TEST_MAX_ACTIVE, 300000);
@@ -97,7 +143,7 @@ class QueueRedisTest {
     }
 
     @Test
-    @DisplayName("스케줄러는 빈자리가 생기면 대기열 사용자를 active로 이동시킨다.")
+    @DisplayName("스케줄러가 자리를 비우면 waiting 사용자를 active로 이동시킨다")
     void logicSchedulerMove() {
         long tinyMax = 1L;
         queueRedisRepository.register(SCHEDULE_ID, 100L, tinyMax, 300000);
@@ -113,7 +159,7 @@ class QueueRedisTest {
     }
 
     @Test
-    @DisplayName("processing schedule에 중복으로 추가해도 하나만 저장된다.")
+    @DisplayName("processing schedule set은 중복 없이 관리된다")
     void logicManageSet() {
         queueRedisRepository.addProcessingSchedule(SCHEDULE_ID);
         queueRedisRepository.addProcessingSchedule(SCHEDULE_ID);
@@ -125,7 +171,7 @@ class QueueRedisTest {
     }
 
     @Test
-    @DisplayName("wait와 active가 모두 비면 processing schedule에서 자동으로 제거된다.")
+    @DisplayName("wait와 active가 모두 비면 processing schedule에서 제거한다")
     void logicCleanupProcessingScheduleWhenQueueDrained() {
         long tinyMax = 1L;
         queueRedisRepository.addProcessingSchedule(SCHEDULE_ID);
@@ -141,7 +187,7 @@ class QueueRedisTest {
     }
 
     @Test
-    @DisplayName("만료된 active 토큰은 상태 조회 시 제거되고 not found로 처리된다.")
+    @DisplayName("만료된 active 토큰은 status 조회 시 제거되고 not found가 된다")
     void logicStatusExpiredActiveRemoved() {
         Long memberId = 777L;
         redisTemplate.opsForZSet().add(getActiveKey(), memberId.toString(), System.currentTimeMillis() - 1_000);
@@ -150,6 +196,11 @@ class QueueRedisTest {
 
         assertThat(result).isEqualTo(-1L);
         assertThat(isMemberInActive(memberId)).isFalse();
+    }
+
+    private void saveOpenedScheduleMeta() {
+        long now = System.currentTimeMillis();
+        queueRedisRepository.saveScheduleMeta(SCHEDULE_ID, now - 60_000, now + 86_400_000);
     }
 
     private boolean isMemberInActive(Long memberId) {
@@ -162,6 +213,10 @@ class QueueRedisTest {
 
     private Long zCard(String key) {
         return redisTemplate.opsForZSet().zCard(key);
+    }
+
+    private String getMetaKey() {
+        return "queue:{" + SCHEDULE_ID + "}:meta";
     }
 
     private String getActiveKey() {

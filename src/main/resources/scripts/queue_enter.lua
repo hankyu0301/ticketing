@@ -1,6 +1,7 @@
 -- KEYS[1]: waiting queue key
 -- KEYS[2]: active queue key
 -- KEYS[3]: sequence key
+-- KEYS[4]: schedule meta key
 -- ARGV[1]: member id
 -- ARGV[2]: max active members
 -- ARGV[3]: active expiration timestamp (ms)
@@ -10,12 +11,22 @@
 local waitKey = KEYS[1]
 local activeKey = KEYS[2]
 local seqKey = KEYS[3]
+local metaKey = KEYS[4]
 
 local memberId = ARGV[1]
 local limit = tonumber(ARGV[2])
 local expireAt = ARGV[3]
 local ttl = tonumber(ARGV[4])
 local now = tonumber(ARGV[5])
+
+local reservationOpenAtMs = redis.call('HGET', metaKey, 'reservationOpenAtMs')
+if not reservationOpenAtMs then
+    return -2
+end
+
+if tonumber(reservationOpenAtMs) > now then
+    return -3
+end
 
 local activeScore = redis.call('ZSCORE', activeKey, memberId)
 if activeScore then
