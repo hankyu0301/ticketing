@@ -15,10 +15,18 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.util.Optional;
+import java.util.function.Supplier;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class QueueService {
+
+    private static final long IMMEDIATE_ENTRY = -100L;
+    private static final long QUEUE_NOT_FOUND = -1L;
+    private static final long META_MISSING = -2L;
+    private static final long RESERVATION_NOT_OPEN = -3L;
 
     private final QueueRedisRepository queueRedisRepository;
     private final QueueScheduleMetaLoader queueScheduleMetaLoader;
@@ -46,45 +54,42 @@ public class QueueService {
     }
 
     public QueueResponse enterQueue(Long scheduleId, Long memberId) {
-        validateSchedulable(scheduleId);
-        queueRedisRepository.addProcessingSchedule(scheduleId);
-
-        Long result = queueRedisRepository.register(
+        Long result = executeWithMetaRecovery(scheduleId, () -> queueRedisRepository.register(
                 scheduleId,
                 memberId,
                 maxActiveMember,
                 activeTimeMs
-        );
+        ));
 
-        if (result == -100) {
-            log.info("Immediate entry - User: {}, Schedule: {}", memberId, scheduleId);
+        if (result == IMMEDIATE_ENTRY) {
+            log.debug("Immediate entry - User: {}, Schedule: {}", memberId, scheduleId);
             return new QueueResponse(0L, 0L, true);
         }
 
-        if (result == -1) {
+        if (result == QUEUE_NOT_FOUND) {
             log.error("Queue entry failed - User: {}, Schedule: {}", memberId, scheduleId);
             throw new QueueNotFoundException(QueueErrorMessage.NOT_EXIST_QUEUE);
         }
 
+        queueRedisRepository.addProcessingSchedule(scheduleId);
+
         long rank = result + 1;
         long retryAfter = calculateRetryTime(rank);
 
-        log.info("Queue entry - User: {}, Schedule: {}, Rank: {}, WaitTime: {}s",
+        log.debug("Queue entry - User: {}, Schedule: {}, Rank: {}, WaitTime: {}s",
                 memberId, scheduleId, rank, retryAfter);
 
         return new QueueResponse(rank, retryAfter, false);
     }
 
     public QueueResponse getQueueStatus(Long scheduleId, Long memberId) {
-        validateSchedulable(scheduleId);
+        Long result = executeWithMetaRecovery(scheduleId, () -> queueRedisRepository.getRank(scheduleId, memberId));
 
-        Long result = queueRedisRepository.getRank(scheduleId, memberId);
-
-        if (result == -100) {
+        if (result == IMMEDIATE_ENTRY) {
             return new QueueResponse(0L, 0L, true);
         }
 
-        if (result == -1) {
+        if (result == QUEUE_NOT_FOUND) {
             throw new QueueNotFoundException(QueueErrorMessage.NOT_EXIST_QUEUE);
         }
 
@@ -110,12 +115,25 @@ public class QueueService {
         return seconds;
     }
 
-    private void validateSchedulable(Long scheduleId) {
-        QueueScheduleMeta scheduleMeta = queueScheduleMetaLoader.getOrLoad(scheduleId)
-                .orElseThrow(() -> new ConcertScheduleNotFoundException(ConcertErrorMessage.NOT_EXIST_SCHEDULE));
+    private Long executeWithMetaRecovery(Long scheduleId, Supplier<Long> action) {
+        Long result = action.get();
 
-        if (scheduleMeta.reservationOpenAtMs() > System.currentTimeMillis()) {
+        if (result != null && result == META_MISSING) {
+            Optional<QueueScheduleMeta> meta = queueScheduleMetaLoader.getOrLoad(scheduleId);
+            if (meta.isEmpty()) {
+                throw new ConcertScheduleNotFoundException(ConcertErrorMessage.NOT_EXIST_SCHEDULE);
+            }
+
+            result = action.get();
+            if (result != null && result == META_MISSING) {
+                throw new ConcertScheduleNotFoundException(ConcertErrorMessage.NOT_EXIST_SCHEDULE);
+            }
+        }
+
+        if (result != null && result == RESERVATION_NOT_OPEN) {
             throw new QueueBadRequestException(QueueErrorMessage.RESERVATION_NOT_OPEN);
         }
+
+        return result;
     }
 }
