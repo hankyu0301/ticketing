@@ -71,7 +71,7 @@ public class QueueService {
             throw new QueueNotFoundException(QueueErrorMessage.NOT_EXIST_QUEUE);
         }
 
-        queueRedisRepository.addProcessingSchedule(scheduleId);
+        queueRedisRepository.refreshProcessingSchedule(scheduleId);
 
         long rank = result + 1;
         long retryAfter = calculateRetryTime(rank);

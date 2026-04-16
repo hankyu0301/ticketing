@@ -31,7 +31,7 @@ public class RedisScriptConfig {
     }
 
     @Bean
-    public RedisScript<Long> cleanupProcessingScheduleScript() {
-        return RedisScript.of(new ClassPathResource("scripts/queue_cleanup_processing_schedule.lua"), Long.class);
+    public RedisScript<Long> refreshProcessingScheduleScript() {
+        return RedisScript.of(new ClassPathResource("scripts/queue_refresh_processing_schedule.lua"), Long.class);
     }
 }

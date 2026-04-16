@@ -23,7 +23,7 @@ public class QueueRedisRepository {
     private final RedisScript<Long> queueStatusScript;
     private final RedisScript<List> activeMemberScript;
     private final RedisScript<Long> validExtensionScript;
-    private final RedisScript<Long> cleanupProcessingScheduleScript;
+    private final RedisScript<Long> refreshProcessingScheduleScript;
 
     private static final String PROCESSING_SCHEDULES_KEY = "queue:processing_schedules";
     private static final String META_RESERVATION_OPEN_AT = "reservationOpenAtMs";
@@ -34,6 +34,9 @@ public class QueueRedisRepository {
 
     @Value("${queue.active-time-ms:300000}")
     private long activeTimeMs;
+
+    @Value("${queue.max-active-member:1000}")
+    private long maxActiveMember;
 
     public void saveScheduleMeta(Long scheduleId, long reservationOpenAtMs, long concertDateMs) {
         redisTemplate.opsForHash().putAll(
@@ -93,7 +96,7 @@ public class QueueRedisRepository {
         );
 
         if (rank != null && rank == -1L) {
-            cleanupProcessingScheduleIfDrained(scheduleId);
+            refreshProcessingSchedule(scheduleId);
         }
 
         return rank;
@@ -114,7 +117,7 @@ public class QueueRedisRepository {
 
         boolean isActive = result != null && result == 1L;
         if (!isActive) {
-            cleanupProcessingScheduleIfDrained(scheduleId);
+            refreshProcessingSchedule(scheduleId);
         }
         return isActive;
     }
@@ -134,45 +137,43 @@ public class QueueRedisRepository {
                 String.valueOf(now)
         );
 
-        cleanupProcessingScheduleIfDrained(scheduleId);
+        refreshProcessingSchedule(scheduleId);
         return movedMembers;
     }
 
     public void removeActiveMember(Long scheduleId, Long memberId) {
         redisTemplate.opsForZSet().remove(getActiveKey(scheduleId), memberId.toString());
-        cleanupProcessingScheduleIfDrained(scheduleId);
+        refreshProcessingSchedule(scheduleId);
     }
 
     public void removeWaitingMember(Long scheduleId, Long memberId) {
         redisTemplate.opsForZSet().remove(getWaitKey(scheduleId), memberId.toString());
-        cleanupProcessingScheduleIfDrained(scheduleId);
+        refreshProcessingSchedule(scheduleId);
     }
 
-    public void addProcessingSchedule(Long scheduleId) {
-        redisTemplate.opsForSet().add(PROCESSING_SCHEDULES_KEY, scheduleId.toString());
-    }
-
-    public Set<Long> getProcessingSchedules() {
-        Set<String> members = redisTemplate.opsForSet().members(PROCESSING_SCHEDULES_KEY);
+    public List<Long> getDueProcessingSchedules(long now) {
+        Set<String> members = redisTemplate.opsForZSet().rangeByScore(PROCESSING_SCHEDULES_KEY, 0, now);
 
         if (members == null || members.isEmpty()) {
-            return Collections.emptySet();
+            return Collections.emptyList();
         }
 
         return members.stream()
                 .map(Long::valueOf)
-                .collect(Collectors.toSet());
+                .collect(Collectors.toList());
     }
 
     public void removeProcessingSchedule(Long scheduleId) {
-        redisTemplate.opsForSet().remove(PROCESSING_SCHEDULES_KEY, scheduleId.toString());
+        redisTemplate.opsForZSet().remove(PROCESSING_SCHEDULES_KEY, scheduleId.toString());
     }
 
-    private void cleanupProcessingScheduleIfDrained(Long scheduleId) {
+    public void refreshProcessingSchedule(Long scheduleId) {
         redisTemplate.execute(
-                cleanupProcessingScheduleScript,
+                refreshProcessingScheduleScript,
                 List.of(getWaitKey(scheduleId), getActiveKey(scheduleId), PROCESSING_SCHEDULES_KEY),
-                scheduleId.toString()
+                scheduleId.toString(),
+                String.valueOf(maxActiveMember),
+                String.valueOf(System.currentTimeMillis())
         );
     }
 

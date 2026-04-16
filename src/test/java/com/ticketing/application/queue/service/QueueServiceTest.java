@@ -57,7 +57,7 @@ class QueueServiceTest {
         assertThat(response.isEntered()).isTrue();
         assertThat(response.getRank()).isEqualTo(0L);
         verify(queueScheduleMetaLoader, never()).getOrLoad(anyLong());
-        verify(queueRedisRepository, never()).addProcessingSchedule(anyLong());
+        verify(queueRedisRepository, never()).refreshProcessingSchedule(anyLong());
     }
 
     @Test
@@ -71,7 +71,7 @@ class QueueServiceTest {
         assertThat(response.getRank()).isEqualTo(5L);
         assertThat(response.getRetryAfter()).isEqualTo(1L);
         verify(queueScheduleMetaLoader, never()).getOrLoad(anyLong());
-        verify(queueRedisRepository).addProcessingSchedule(1L);
+        verify(queueRedisRepository).refreshProcessingSchedule(1L);
     }
 
     @Test
@@ -85,7 +85,7 @@ class QueueServiceTest {
 
         assertThat(response.getRank()).isEqualTo(5L);
         verify(queueScheduleMetaLoader).getOrLoad(1L);
-        verify(queueRedisRepository).addProcessingSchedule(1L);
+        verify(queueRedisRepository).refreshProcessingSchedule(1L);
     }
 
     @Test
