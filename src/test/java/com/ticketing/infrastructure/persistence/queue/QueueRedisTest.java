@@ -7,13 +7,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 import java.util.List;
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -38,6 +38,7 @@ class QueueRedisTest {
     @BeforeEach
     void setUp() {
         redisTemplate.getConnectionFactory().getConnection().serverCommands().flushAll();
+        ReflectionTestUtils.setField(queueRedisRepository, "maxActiveMember", TEST_MAX_ACTIVE);
         saveOpenedScheduleMeta();
     }
 
@@ -126,7 +127,7 @@ class QueueRedisTest {
     }
 
     @Test
-    @DisplayName("이미 waiting에 있는 사용자는 기존 rank를 유지한다")
+    @DisplayName("이미 waiting인 사용자는 기존 rank를 유지한다")
     void logicEnterWaitingMemberAgain() {
         for (long i = 1; i <= TEST_MAX_ACTIVE; i++) {
             queueRedisRepository.register(SCHEDULE_ID, i, TEST_MAX_ACTIVE, 300000);
@@ -143,9 +144,10 @@ class QueueRedisTest {
     }
 
     @Test
-    @DisplayName("스케줄러가 자리를 비우면 waiting 사용자를 active로 이동시킨다")
+    @DisplayName("scheduler가 자리를 비우면 waiting 사용자를 active로 이동시킨다")
     void logicSchedulerMove() {
         long tinyMax = 1L;
+        ReflectionTestUtils.setField(queueRedisRepository, "maxActiveMember", tinyMax);
         queueRedisRepository.register(SCHEDULE_ID, 100L, tinyMax, 300000);
         queueRedisRepository.register(SCHEDULE_ID, 200L, tinyMax, 300000);
 
@@ -159,35 +161,57 @@ class QueueRedisTest {
     }
 
     @Test
-    @DisplayName("processing schedule set은 중복 없이 관리된다")
-    void logicManageSet() {
-        queueRedisRepository.addProcessingSchedule(SCHEDULE_ID);
-        queueRedisRepository.addProcessingSchedule(SCHEDULE_ID);
-        queueRedisRepository.addProcessingSchedule(SCHEDULE_ID);
+    @DisplayName("waiting이 있고 active가 가득 차 있으면 processing schedule은 다음 만료 시각으로 예약된다")
+    void logicScheduleFutureWhenActiveIsFull() {
+        long tinyMax = 1L;
+        ReflectionTestUtils.setField(queueRedisRepository, "maxActiveMember", tinyMax);
+        queueRedisRepository.register(SCHEDULE_ID, 100L, tinyMax, 300000);
+        queueRedisRepository.register(SCHEDULE_ID, 200L, tinyMax, 300000);
 
-        Set<Long> schedules = queueRedisRepository.getProcessingSchedules();
-        assertThat(schedules).hasSize(1);
-        assertThat(schedules).contains(SCHEDULE_ID);
+        queueRedisRepository.refreshProcessingSchedule(SCHEDULE_ID);
+
+        Double activeExpireAt = activeScore(100L);
+        Double processingScore = processingScore();
+
+        assertThat(processingScore).isEqualTo(activeExpireAt);
+        assertThat(queueRedisRepository.getDueProcessingSchedules(System.currentTimeMillis()))
+                .doesNotContain(SCHEDULE_ID);
     }
 
     @Test
-    @DisplayName("wait와 active가 모두 비면 processing schedule에서 제거한다")
-    void logicCleanupProcessingScheduleWhenQueueDrained() {
+    @DisplayName("같은 schedule을 여러 번 refresh해도 due schedule은 중복 없이 관리된다")
+    void logicManageDueScheduleWithoutDuplicates() {
         long tinyMax = 1L;
-        queueRedisRepository.addProcessingSchedule(SCHEDULE_ID);
+        ReflectionTestUtils.setField(queueRedisRepository, "maxActiveMember", tinyMax);
         queueRedisRepository.register(SCHEDULE_ID, 100L, tinyMax, 300000);
         queueRedisRepository.register(SCHEDULE_ID, 200L, tinyMax, 300000);
 
         queueRedisRepository.removeActiveMember(SCHEDULE_ID, 100L);
-        queueRedisRepository.moveUsersToActive(SCHEDULE_ID, tinyMax, 10, 300000);
-        queueRedisRepository.removeActiveMember(SCHEDULE_ID, 200L);
+        queueRedisRepository.refreshProcessingSchedule(SCHEDULE_ID);
 
-        Set<Long> schedules = queueRedisRepository.getProcessingSchedules();
-        assertThat(schedules).doesNotContain(SCHEDULE_ID);
+        List<Long> dueSchedules = queueRedisRepository.getDueProcessingSchedules(System.currentTimeMillis());
+        assertThat(dueSchedules).hasSize(1);
+        assertThat(dueSchedules).contains(SCHEDULE_ID);
     }
 
     @Test
-    @DisplayName("만료된 active 토큰은 status 조회 시 제거되고 not found가 된다")
+    @DisplayName("wait와 active가 모두 비면 processing schedule에서 제거된다")
+    void logicRemoveProcessingScheduleWhenQueueDrained() {
+        long tinyMax = 1L;
+        ReflectionTestUtils.setField(queueRedisRepository, "maxActiveMember", tinyMax);
+        queueRedisRepository.register(SCHEDULE_ID, 100L, tinyMax, 300000);
+        queueRedisRepository.register(SCHEDULE_ID, 200L, tinyMax, 300000);
+
+        queueRedisRepository.refreshProcessingSchedule(SCHEDULE_ID);
+        queueRedisRepository.removeActiveMember(SCHEDULE_ID, 100L);
+        queueRedisRepository.moveUsersToActive(SCHEDULE_ID, tinyMax, 10, 300000);
+        queueRedisRepository.removeActiveMember(SCHEDULE_ID, 200L);
+
+        assertThat(processingScore()).isNull();
+    }
+
+    @Test
+    @DisplayName("만료된 active 토큰은 status 조회 중 제거되고 not found를 반환한다")
     void logicStatusExpiredActiveRemoved() {
         Long memberId = 777L;
         redisTemplate.opsForZSet().add(getActiveKey(), memberId.toString(), System.currentTimeMillis() - 1_000);
@@ -199,18 +223,20 @@ class QueueRedisTest {
     }
 
     @Test
-    @DisplayName("active leave 후에도 waiting 이 남아 있으면 processing schedule 은 유지된다")
-    void logicKeepProcessingScheduleWhenWaitingRemains() {
+    @DisplayName("active leave 후 waiting이 남아 있으면 processing schedule은 즉시 처리 대상으로 갱신된다")
+    void logicScheduleNowWhenActiveLeaveOpensSlot() {
         long tinyMax = 1L;
-        queueRedisRepository.addProcessingSchedule(SCHEDULE_ID);
+        ReflectionTestUtils.setField(queueRedisRepository, "maxActiveMember", tinyMax);
         queueRedisRepository.register(SCHEDULE_ID, 100L, tinyMax, 300000);
         queueRedisRepository.register(SCHEDULE_ID, 200L, tinyMax, 300000);
+        queueRedisRepository.refreshProcessingSchedule(SCHEDULE_ID);
 
         queueRedisRepository.removeActiveMember(SCHEDULE_ID, 100L);
 
         assertThat(isMemberInActive(100L)).isFalse();
         assertThat(isMemberInWait(200L)).isTrue();
-        assertThat(queueRedisRepository.getProcessingSchedules()).contains(SCHEDULE_ID);
+        assertThat(queueRedisRepository.getDueProcessingSchedules(System.currentTimeMillis())).contains(SCHEDULE_ID);
+        assertThat(processingScore()).isLessThanOrEqualTo((double) System.currentTimeMillis());
     }
 
     private void saveOpenedScheduleMeta() {
@@ -224,6 +250,14 @@ class QueueRedisTest {
 
     private boolean isMemberInWait(Long memberId) {
         return redisTemplate.opsForZSet().score(getWaitKey(), memberId.toString()) != null;
+    }
+
+    private Double activeScore(Long memberId) {
+        return redisTemplate.opsForZSet().score(getActiveKey(), memberId.toString());
+    }
+
+    private Double processingScore() {
+        return redisTemplate.opsForZSet().score(getProcessingKey(), SCHEDULE_ID.toString());
     }
 
     private Long zCard(String key) {
@@ -240,5 +274,9 @@ class QueueRedisTest {
 
     private String getWaitKey() {
         return "queue:{" + SCHEDULE_ID + "}:wait";
+    }
+
+    private String getProcessingKey() {
+        return "queue:processing_schedules";
     }
 }

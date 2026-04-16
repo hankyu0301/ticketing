@@ -9,7 +9,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 @Component
@@ -35,7 +34,7 @@ public class QueueScheduler {
             lockAtMostFor = "${scheduler.lock-at-most-for:PT10S}"
     )
     public void processQueue() {
-        Set<Long> scheduleIds = queueRedisRepository.getProcessingSchedules();
+        List<Long> scheduleIds = queueRedisRepository.getDueProcessingSchedules(System.currentTimeMillis());
         if (scheduleIds == null || scheduleIds.isEmpty()) {
             return;
         }
