@@ -36,4 +36,13 @@ public class QueueController {
 
         return ResponseEntity.ok(ResponseDTO.getSuccessResult(response));
     }
+
+    @DeleteMapping("/active/{scheduleId}")
+    public ResponseEntity<ResponseDTO<Void>> leaveActive(
+            @PathVariable Long scheduleId,
+            @AuthenticationPrincipal CustomUserDetails member) {
+
+        queueService.leaveActive(scheduleId, member.getSessionMember().getMemberId());
+        return ResponseEntity.ok(ResponseDTO.getSuccessResult(null));
+    }
 }

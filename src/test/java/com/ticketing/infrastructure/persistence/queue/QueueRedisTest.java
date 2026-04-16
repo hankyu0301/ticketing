@@ -198,6 +198,21 @@ class QueueRedisTest {
         assertThat(isMemberInActive(memberId)).isFalse();
     }
 
+    @Test
+    @DisplayName("active leave 후에도 waiting 이 남아 있으면 processing schedule 은 유지된다")
+    void logicKeepProcessingScheduleWhenWaitingRemains() {
+        long tinyMax = 1L;
+        queueRedisRepository.addProcessingSchedule(SCHEDULE_ID);
+        queueRedisRepository.register(SCHEDULE_ID, 100L, tinyMax, 300000);
+        queueRedisRepository.register(SCHEDULE_ID, 200L, tinyMax, 300000);
+
+        queueRedisRepository.removeActiveMember(SCHEDULE_ID, 100L);
+
+        assertThat(isMemberInActive(100L)).isFalse();
+        assertThat(isMemberInWait(200L)).isTrue();
+        assertThat(queueRedisRepository.getProcessingSchedules()).contains(SCHEDULE_ID);
+    }
+
     private void saveOpenedScheduleMeta() {
         long now = System.currentTimeMillis();
         queueRedisRepository.saveScheduleMeta(SCHEDULE_ID, now - 60_000, now + 86_400_000);
