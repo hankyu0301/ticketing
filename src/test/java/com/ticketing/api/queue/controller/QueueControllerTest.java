@@ -24,8 +24,10 @@ import org.springframework.test.web.servlet.ResultActions;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
@@ -139,5 +141,21 @@ class QueueControllerTest {
 
         result.andExpect(status().isNotFound())
                 .andDo(print());
+    }
+
+    @Test
+    @DisplayName("active leave 요청이 들어오면 정상 응답을 반환한다.")
+    void leaveActiveSuccess() throws Exception {
+        Long scheduleId = 100L;
+
+        ResultActions result = mockMvc.perform(delete("/api/v1/queue/active/{scheduleId}", scheduleId)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON));
+
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUCCESS"))
+                .andDo(print());
+
+        verify(queueService).leaveActive(scheduleId, 1L);
     }
 }

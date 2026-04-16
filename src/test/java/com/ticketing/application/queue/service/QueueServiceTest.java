@@ -214,6 +214,14 @@ class QueueServiceTest {
                 .hasMessage(QueueErrorMessage.INVALID_ESTIMATED_THROUGHPUT);
     }
 
+    @Test
+    @DisplayName("active leave는 repository remove만 호출하고 예외 없이 종료된다")
+    void leaveActiveSuccess() {
+        queueService.leaveActive(1L, 1L);
+
+        verify(queueRedisRepository).removeActiveMember(1L, 1L);
+    }
+
     private QueueScheduleMeta openedScheduleMeta() {
         long now = System.currentTimeMillis();
         return new QueueScheduleMeta(1L, now - 60_000, now + 86_400_000);

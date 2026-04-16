@@ -99,6 +99,11 @@ public class QueueService {
         return new QueueResponse(rank, retryAfter, false);
     }
 
+    public void leaveActive(Long scheduleId, Long memberId) {
+        queueRedisRepository.removeActiveMember(scheduleId, memberId);
+        log.debug("Active leave - User: {}, Schedule: {}", memberId, scheduleId);
+    }
+
     private long calculateRetryTime(long rank) {
         if (estimatedThroughput <= 0) {
             throw new QueueConfigException(QueueErrorMessage.INVALID_ESTIMATED_THROUGHPUT);
