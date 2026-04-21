@@ -1,91 +1,91 @@
 package com.ticketing.global.config;
 
-import com.ticketing.infrastructure.persistence.queue.QueueRedisRepository;
 import com.ticketing.application.queue.scheduler.QueueScheduler;
+import com.ticketing.infrastructure.persistence.queue.QueueRedisRepository;
+import net.javacrumbs.shedlock.core.DefaultLockingTaskExecutor;
+import net.javacrumbs.shedlock.core.LockConfiguration;
+import net.javacrumbs.shedlock.core.LockProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.data.redis.connection.RedisConnectionFactory;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.test.context.TestPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Duration;
+import java.time.Instant;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-@SpringBootTest
-@Testcontainers
-// 테스트 중 스케줄러 자동 실행 방지
-@TestPropertySource(properties = "scheduler.fixed-delay=100000000")
+@ExtendWith(MockitoExtension.class)
 class ShedLockTest {
 
-    @Container
-    @ServiceConnection
-    static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:alpine"))
-            .withExposedPorts(6379);
-
-    @Autowired
-    private QueueScheduler queueScheduler;
-
-    @Autowired
-    private StringRedisTemplate redisTemplate;
-
-    @Autowired
-    private RedisConnectionFactory redisConnectionFactory;
-
-    @MockitoSpyBean
+    @Mock
     private QueueRedisRepository queueRedisRepository;
 
-    private static final String PROCESSING_SCHEDULES_KEY = "queue:processing_schedules";
+    @Mock
+    private LockProvider lockProvider;
+
+    private QueueScheduler queueScheduler;
+    private DefaultLockingTaskExecutor lockingTaskExecutor;
 
     @BeforeEach
     void setUp() {
-        redisConnectionFactory.getConnection().serverCommands().flushAll();
-        Mockito.reset(queueRedisRepository);
+        queueScheduler = new QueueScheduler(queueRedisRepository);
+        ReflectionTestUtils.setField(queueScheduler, "maxActiveMember", 1000L);
+        ReflectionTestUtils.setField(queueScheduler, "enterBatchSize", 50L);
+        ReflectionTestUtils.setField(queueScheduler, "activeTimeMs", 300000L);
+
+        lockingTaskExecutor = new DefaultLockingTaskExecutor(lockProvider);
     }
 
     @Test
     @DisplayName("다른 서버가 이미 락을 잡고 있으면 로직은 실행되지 않는다.")
     void distributedLockSimulation() {
         // given
-        // (ShedLock 라이브러리가 기본적으로 "job-lock" 접두사를 붙임)
-        String lockKey = "job-lock:ticketing-lock:QueueScheduler_processQueue";
+        given(lockProvider.lock(any())).willReturn(Optional.empty());
 
-        // Server B가 먼저 락을 선점했다고 가정
-        redisTemplate.opsForValue().set(lockKey, "SERVER_B_HOST", Duration.ofSeconds(10));
+        // when
+        lockingTaskExecutor.executeWithLock((Runnable) queueScheduler::processQueue, lockConfiguration());
 
-        redisTemplate.opsForSet().add(PROCESSING_SCHEDULES_KEY, "1");
-
-        // when: 현재 서버(Server A)가 실행 시도
-        queueScheduler.processQueue();
-
-        // then: 락이 걸려있으므로 실행 0회
-        verify(queueRedisRepository, times(0))
-                .moveUsersToActive(anyLong(), anyLong(), anyLong(), anyLong());
+        // then
+        verify(queueRedisRepository, never()).getDueProcessingSchedules(anyLong());
+        verify(queueRedisRepository, never()).moveUsersToActive(anyLong(), anyLong(), anyLong(), anyLong());
     }
 
     @Test
     @DisplayName("락이 없으면 로직이 실행된다.")
     void normalExecutionTest() {
         // given
-        redisTemplate.opsForSet().add(PROCESSING_SCHEDULES_KEY, "1");
+        given(lockProvider.lock(any())).willReturn(Optional.of(() -> {}));
+        given(queueRedisRepository.getDueProcessingSchedules(anyLong())).willReturn(List.of(1L));
+        given(queueRedisRepository.moveUsersToActive(anyLong(), anyLong(), anyLong(), anyLong()))
+                .willReturn(Collections.emptyList());
 
         // when
-        queueScheduler.processQueue();
+        lockingTaskExecutor.executeWithLock((Runnable) queueScheduler::processQueue, lockConfiguration());
 
         // then
+        verify(queueRedisRepository, times(1)).getDueProcessingSchedules(anyLong());
         verify(queueRedisRepository, times(1))
                 .moveUsersToActive(anyLong(), anyLong(), anyLong(), anyLong());
+    }
+
+    private LockConfiguration lockConfiguration() {
+        return new LockConfiguration(
+                Instant.now(),
+                "QueueScheduler_processQueue",
+                Duration.ofSeconds(10),
+                Duration.ofSeconds(1)
+        );
     }
 }

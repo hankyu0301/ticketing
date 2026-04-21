@@ -13,6 +13,7 @@ public interface ReservationMapper {
     Reservation findById(Long reservationId);
     Reservation findByIdForUpdate(Long reservationId);
     List<Reservation> findAllByMemberId(Long memberId);
-    List<Long> findExpiredPendingReservationIds(@Param("now") LocalDateTime now, @Param("limit") int limit);
+    List<Long> findExpiredPendingReservationIds(@Param("now") LocalDateTime now,
+                                                @Param("processLimit") int processLimit);
     void update(Reservation reservation);
 }

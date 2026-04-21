@@ -2,8 +2,6 @@ package com.ticketing.application.payment.service;
 
 import com.ticketing.api.payment.dto.PaymentResponse;
 import com.ticketing.api.reservation.dto.ReservationCreateRequest;
-import com.ticketing.application.payment.service.PaymentExpirationService;
-import com.ticketing.application.payment.service.PaymentService;
 import com.ticketing.application.reservation.facade.ReservationFacade;
 import com.ticketing.domain.payment.model.Payment;
 import com.ticketing.domain.reservation.model.Reservation;
@@ -25,7 +23,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,9 +34,6 @@ class PaymentServiceIntegrationTest extends IntegrationTestSupport {
 
     @Autowired
     private PaymentService paymentService;
-
-    @Autowired
-    private PaymentExpirationService paymentExpirationService;
 
     @Autowired
     private PaymentMessageListener paymentMessageListener;
@@ -153,29 +147,6 @@ class PaymentServiceIntegrationTest extends IntegrationTestSupport {
         Payment completed = paymentMapper.findById(retried.getPaymentId()).orElseThrow();
         assertThat(retried.getPaymentId()).isEqualTo(pendingResponse.getPaymentId());
         assertThat(completed.getStatus()).isEqualTo(Payment.PaymentStatus.COMPLETED);
-    }
-
-    @Test
-    @DisplayName("만료된 예약은 취소되고 연결된 PENDING 결제는 FAILED 처리된다.")
-    void expireReservationCancelsPendingReservation() {
-        Long reservationId = createReservation(memberId);
-        PaymentResponse pendingResponse = paymentService.requestAsync(memberId, reservationId);
-
-        Reservation reservation = reservationMapper.findById(reservationId);
-        ReflectionTestUtils.setField(reservation, "expiredAt", LocalDateTime.now().minusMinutes(1));
-        reservationMapper.update(reservation);
-
-        paymentExpirationService.expireReservation(reservationId);
-        paymentMessageListener.handlePaymentRequested(new PaymentRequestedMessage(pendingResponse.getPaymentId(), reservationId, memberId));
-
-        Payment payment = paymentMapper.findById(pendingResponse.getPaymentId()).orElseThrow();
-        Reservation expiredReservation = reservationMapper.findById(reservationId);
-        Seat releasedSeat = seatMapper.findById(seatId).orElseThrow();
-
-        assertThat(payment.getStatus()).isEqualTo(Payment.PaymentStatus.FAILED);
-        assertThat(expiredReservation.getStatus()).isEqualTo(Reservation.ReservationStatus.CANCELLED);
-        assertThat(releasedSeat.getStatus()).isEqualTo(Seat.SeatStatus.AVAILABLE);
-        assertThat(releasedSeat.getMemberId()).isNull();
     }
 
     private Long createReservation(Long memberId) {

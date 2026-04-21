@@ -55,7 +55,7 @@ CREATE TABLE reservations (
     seat_id BIGINT NOT NULL COMMENT 'seat foreign key',
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING' COMMENT 'reservation status',
     reserved_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'reserved timestamp',
-    expired_at DATETIME DEFAULT NULL COMMENT 'payment expiration timestamp',
+    expired_at DATETIME DEFAULT NULL COMMENT 'reservation expiration timestamp',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'created timestamp',
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'updated timestamp',
     CONSTRAINT fk_reservations_member
@@ -64,7 +64,8 @@ CREATE TABLE reservations (
         FOREIGN KEY (schedule_id) REFERENCES concert_schedules(schedule_id),
     CONSTRAINT fk_reservations_seat
         FOREIGN KEY (seat_id) REFERENCES seats(seat_id),
-    INDEX idx_reservations_member_reserved_at (member_id, reserved_at DESC)
+    INDEX idx_reservations_member_reserved_at (member_id, reserved_at DESC),
+    INDEX idx_reservations_status_expired_at_reservation_id (status, expired_at, reservation_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='reservation history';
 
 CREATE TABLE payments (
