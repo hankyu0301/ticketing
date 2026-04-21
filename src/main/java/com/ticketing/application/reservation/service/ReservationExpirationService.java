@@ -1,4 +1,4 @@
-package com.ticketing.application.payment.service;
+package com.ticketing.application.reservation.service;
 
 import com.ticketing.domain.payment.model.Payment;
 import com.ticketing.domain.reservation.model.Reservation;
@@ -15,19 +15,19 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-public class PaymentExpirationService {
+public class ReservationExpirationService {
 
     private final ReservationMapper reservationMapper;
     private final SeatMapper seatMapper;
     private final PaymentMapper paymentMapper;
 
     @Transactional(readOnly = true)
-    public List<Long> findExpiredPendingReservationIds(LocalDateTime now, int limit) {
-        return reservationMapper.findExpiredPendingReservationIds(now, limit);
+    public List<Long> findExpiredPendingReservationIds(LocalDateTime now, int processLimit) {
+        return reservationMapper.findExpiredPendingReservationIds(now, processLimit);
     }
 
     @Transactional
-    public void expireReservation(Long reservationId) {
+    public void expirePendingReservation(Long reservationId) {
         Reservation reservation = reservationMapper.findByIdForUpdate(reservationId);
         if (reservation == null) {
             return;

@@ -79,10 +79,14 @@ scheduler:
 ticketing:
   lock:
     strategy: PESSIMISTIC
-  payment:
+  reservation:
+    hold-duration: PT30M
     expiration:
       scan-delay-ms: 60000
-      batch-size: 100
+      process-limit: 300
+      lock-at-least-for: PT1S
+      lock-at-most-for: PT2M
+  payment:
     rabbitmq:
       exchange: ticketing.payment
       queue: ticketing.payment.requested

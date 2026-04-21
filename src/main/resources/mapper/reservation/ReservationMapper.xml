@@ -35,8 +35,8 @@
         WHERE status = 'PENDING'
           AND expired_at IS NOT NULL
           AND expired_at &lt;= #{now}
-        ORDER BY expired_at ASC
-        LIMIT #{limit}
+        ORDER BY expired_at ASC, reservation_id ASC
+        LIMIT #{processLimit}
     </select>
 
     <update id="update">

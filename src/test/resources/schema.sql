@@ -80,6 +80,9 @@ CREATE TABLE reservations (
 CREATE INDEX idx_reservations_member_reserved_at
     ON reservations (member_id, reserved_at);
 
+CREATE INDEX idx_reservations_status_expired_at_reservation_id
+    ON reservations (status, expired_at, reservation_id);
+
 CREATE TABLE payments (
     payment_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     reservation_id BIGINT NOT NULL,
