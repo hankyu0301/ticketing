@@ -26,6 +26,7 @@ repositories {
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-amqp'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.session:spring-session-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-security'
@@ -55,4 +56,243 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+}
+
+def loadtestComposeFile = rootProject.file('docker-compose.loadtest.yml').absolutePath
+def loadtestProperty = { String name, String fallback ->
+    providers.gradleProperty(name).orElse(fallback).get()
+}
+def loadtestSqlDecimalProperty = { String name, String fallback ->
+    def value = loadtestProperty(name, fallback)
+    if (!(value ==~ /[0-9]+(\.[0-9]+)?/)) {
+        throw new GradleException("${name} must be a non-negative decimal")
+    }
+    value
+}
+def loadtestSqlPositiveIntProperty = { String name, String fallback ->
+    def value = loadtestProperty(name, fallback)
+    if (!(value ==~ /[1-9][0-9]*/)) {
+        throw new GradleException("${name} must be a positive integer")
+    }
+    value
+}
+
+tasks.register('loadtestBaseDown', Exec) {
+    group = 'loadtest'
+    description = 'Stop loadtest base DB container.'
+    commandLine 'docker', 'compose', '-f', loadtestComposeFile, '--profile', 'base', 'down'
+}
+
+tasks.register('loadtestRemoveBaseVolume', Exec) {
+    group = 'loadtest'
+    description = 'Remove the immutable loadtest base MariaDB volume.'
+    commandLine 'docker', 'volume', 'rm', '-f', 'ticketing-loadtest-base'
+    ignoreExitValue = true
+}
+
+tasks.register('loadtestBaseUp', Exec) {
+    group = 'loadtest'
+    description = 'Create the loadtest base DB volume from schema and large seed SQL.'
+    commandLine 'docker', 'compose', '-f', loadtestComposeFile, '--profile', 'base', 'up', '-d', 'mariadb-base'
+}
+
+tasks.register('loadtestBaseRebuild') {
+    group = 'loadtest'
+    description = 'Rebuild the loadtest base DB volume. This can take a while on the first run.'
+    dependsOn 'loadtestBaseDown', 'loadtestRemoveBaseVolume', 'loadtestBaseUp'
+}
+
+tasks.named('loadtestRemoveBaseVolume') {
+    mustRunAfter 'loadtestBaseDown'
+}
+
+tasks.named('loadtestBaseUp') {
+    mustRunAfter 'loadtestRemoveBaseVolume'
+}
+
+tasks.register('loadtestRunDown', Exec) {
+    group = 'loadtest'
+    description = 'Stop the mutable loadtest DB/Redis containers.'
+    commandLine 'docker', 'compose', '-f', loadtestComposeFile, 'down'
+}
+
+tasks.register('loadtestCopyBaseToRun', Exec) {
+    group = 'loadtest'
+    description = 'Copy the immutable base DB volume into the mutable run DB volume.'
+    commandLine 'docker', 'compose', '-f', loadtestComposeFile, '--profile', 'tools', 'run', '--rm', 'volume-copy'
+}
+
+tasks.register('loadtestRunInfra', Exec) {
+    group = 'loadtest'
+    description = 'Start the mutable loadtest MariaDB, Redis, and Spring Boot app containers.'
+    commandLine 'docker', 'compose', '-f', loadtestComposeFile, 'up', '-d', 'app'
+}
+
+tasks.register('loadtestAppBuild', Exec) {
+    group = 'loadtest'
+    description = 'Build the Spring Boot app image used by docker-compose.loadtest.yml.'
+    commandLine 'docker', 'compose', '-f', loadtestComposeFile, 'build', 'app'
+}
+
+tasks.register('loadtestRunReset') {
+    group = 'loadtest'
+    description = 'Reset the mutable run DB volume from the base volume and start loadtest infra.'
+    dependsOn 'loadtestRunDown', 'loadtestBaseDown', 'loadtestCopyBaseToRun', 'loadtestRunInfra'
+}
+
+tasks.named('loadtestBaseDown') {
+    mustRunAfter 'loadtestRunDown'
+}
+
+tasks.named('loadtestCopyBaseToRun') {
+    mustRunAfter 'loadtestRunDown', 'loadtestBaseDown'
+}
+
+tasks.named('loadtestRunInfra') {
+    mustRunAfter 'loadtestCopyBaseToRun'
+}
+
+tasks.register('loadtestResetHotSchedule', Exec) {
+    group = 'loadtest'
+    description = 'Reset mutable reservations and seats for the hot schedule in the run DB.'
+    commandLine 'docker', 'exec', 'ticketing-loadtest-mariadb',
+            'mariadb', '-uroot', '-proot', 'ticketing',
+            '-e', 'source /loadtest/mysql/20_reset_hot_schedule.sql'
+}
+
+tasks.register('loadtestVerifyLargeSeed', Exec) {
+    group = 'loadtest'
+    description = 'Print row counts for the large loadtest seed.'
+    commandLine 'docker', 'exec', 'ticketing-loadtest-mariadb',
+            'mariadb', '-uroot', '-proot', 'ticketing',
+            '-e', 'source /loadtest/mysql/30_verify_large_seed.sql'
+}
+
+tasks.register('loadtestResetSlowLog', Exec) {
+    group = 'loadtest'
+    description = 'Enable and clear MariaDB slow query log for a loadtest run. Override threshold with -PlongQueryTime=0.05.'
+    def longQueryTime = loadtestSqlDecimalProperty('longQueryTime', '0.05')
+    commandLine 'docker', 'exec', 'ticketing-loadtest-mariadb',
+            'mariadb', '-uroot', '-proot', 'ticketing',
+            '-e', "SET GLOBAL log_output = 'TABLE'; " +
+                    "SET GLOBAL slow_query_log = 'OFF'; " +
+                    "TRUNCATE TABLE mysql.slow_log; " +
+                    "SET GLOBAL long_query_time = ${longQueryTime}; " +
+                    "SET GLOBAL slow_query_log = 'ON'; " +
+                    "SELECT @@global.slow_query_log AS slow_query_log, @@global.log_output AS log_output, @@global.long_query_time AS long_query_time;"
+}
+
+tasks.register('loadtestDumpSlowLog', Exec) {
+    group = 'loadtest'
+    description = 'Print the slowest MariaDB queries captured during a loadtest run. Override row count with -PslowLogLimit=20.'
+    def slowLogLimit = loadtestSqlPositiveIntProperty('slowLogLimit', '20')
+    commandLine 'docker', 'exec', 'ticketing-loadtest-mariadb',
+            'mariadb', '-uroot', '-proot', 'ticketing',
+            '-e', "SELECT COUNT(*) AS slow_query_count FROM mysql.slow_log WHERE db = 'ticketing'; " +
+                    "SELECT start_time, ROUND(query_time, 6) AS query_time_sec, ROUND(lock_time, 6) AS lock_time_sec, " +
+                    "rows_sent, rows_examined, db, LEFT(sql_text, 1000) AS sql_text " +
+                    "FROM mysql.slow_log " +
+                    "WHERE db = 'ticketing' " +
+                    "ORDER BY query_time DESC, start_time DESC " +
+                    "LIMIT ${slowLogLimit};"
+}
+
+tasks.register('loadtestExplainReservationQueries', Exec) {
+    group = 'loadtest'
+    description = 'Print EXPLAIN plans for the main reservation-related SQL paths. Override ids with -PseatId, -PmemberId, -PreservationId.'
+    def seatId = loadtestSqlPositiveIntProperty('seatId', '1')
+    def memberId = loadtestSqlPositiveIntProperty('memberId', '20001')
+    def reservationId = loadtestSqlPositiveIntProperty('reservationId', '1')
+    def processLimit = loadtestSqlPositiveIntProperty('processLimit', '300')
+    commandLine 'docker', 'exec', 'ticketing-loadtest-mariadb',
+            'mariadb', '-uroot', '-proot', 'ticketing',
+            '-e', "SELECT 'SeatMapper.findByIdWithPessimisticLock' AS mapper_query; " +
+                    "EXPLAIN SELECT seat_id, schedule_id, seat_no, grade, price, member_id, status, updated_at, created_at " +
+                    "FROM seats WHERE seat_id = ${seatId} FOR UPDATE; " +
+                    "SELECT 'SeatMapper.update' AS mapper_query; " +
+                    "EXPLAIN UPDATE seats SET status = 'TEMPORARY', member_id = ${memberId}, updated_at = NOW() WHERE seat_id = ${seatId}; " +
+                    "SELECT 'ReservationMapper.save' AS mapper_query; " +
+                    "SELECT 'INSERT is measured through slow_log; EXPLAIN is not applicable to INSERT VALUES.' AS note; " +
+                    "SELECT 'ReservationMapper.findExpiredPendingReservationIds' AS mapper_query; " +
+                    "EXPLAIN SELECT reservation_id FROM reservations " +
+                    "WHERE status = 'PENDING' AND expired_at IS NOT NULL AND expired_at <= NOW() " +
+                    "ORDER BY expired_at ASC, reservation_id ASC LIMIT ${processLimit}; " +
+                    "SELECT 'ReservationMapper.findByIdForUpdate' AS mapper_query; " +
+                    "EXPLAIN SELECT reservation_id, member_id, seat_id, schedule_id, status, reserved_at, expired_at, created_at, updated_at " +
+                    "FROM reservations WHERE reservation_id = ${reservationId} FOR UPDATE; " +
+                    "SELECT 'ReservationMapper.findAllByMemberId' AS mapper_query; " +
+                    "EXPLAIN SELECT reservation_id, member_id, seat_id, schedule_id, status, reserved_at, expired_at, created_at, updated_at " +
+                    "FROM reservations WHERE member_id = ${memberId}; " +
+                    "SHOW INDEX FROM seats; " +
+                    "SHOW INDEX FROM reservations;"
+}
+
+tasks.register('loadtestResetRedisQueue', Exec) {
+    group = 'loadtest'
+    description = 'Clear Redis queue state for a loadtest schedule.'
+    def scheduleId = loadtestProperty('scheduleId', '1')
+    commandLine 'docker', 'exec', 'ticketing-loadtest-redis',
+            'redis-cli', '--eval', '/loadtest/redis/reset_queue_state.lua',
+            "queue:{${scheduleId}}:meta",
+            "queue:{${scheduleId}}:active",
+            "queue:{${scheduleId}}:wait",
+            "queue:{${scheduleId}}:score",
+            'queue:processing_schedules',
+            ',', scheduleId
+}
+
+tasks.register('loadtestSeedRedisQueue', Exec) {
+    group = 'loadtest'
+    description = 'Seed Redis active/waiting queue state for loadtest scenarios.'
+    def scheduleId = loadtestProperty('scheduleId', '1')
+    def activeStartMemberId = loadtestProperty('activeStartMemberId', '20001')
+    def activeCount = loadtestProperty('activeCount', '10000')
+    def waitingStartMemberId = loadtestProperty('waitingStartMemberId', '1001')
+    def waitingCount = loadtestProperty('waitingCount', '0')
+    def activeDurationMs = loadtestProperty('activeDurationMs', '1800000')
+    def reservationOpenAtMs = loadtestProperty('reservationOpenAtMs', '0')
+    def concertDateMs = loadtestProperty('concertDateMs', '4102444800000')
+
+    commandLine 'docker', 'exec', 'ticketing-loadtest-redis',
+            'redis-cli', '--eval', '/loadtest/redis/seed_queue_state.lua',
+            "queue:{${scheduleId}}:meta",
+            "queue:{${scheduleId}}:active",
+            "queue:{${scheduleId}}:wait",
+            "queue:{${scheduleId}}:score",
+            'queue:processing_schedules',
+            ',',
+            scheduleId,
+            activeStartMemberId,
+            activeCount,
+            waitingStartMemberId,
+            waitingCount,
+            activeDurationMs,
+            reservationOpenAtMs,
+            concertDateMs
+}
+
+tasks.register('loadtestRunK6', Exec) {
+    group = 'loadtest'
+    description = 'Run a k6 scenario. Override with -Pscenario, -Ptargets, -Pprofile, and -Presult.'
+    environment 'SCENARIO', loadtestProperty('scenario', 'smoke-seeded-login')
+    environment 'TARGETS_FILE', loadtestProperty('targets', 'loadtest/k6/data/targets.smoke.json')
+    environment 'LOAD_PROFILE', loadtestProperty('profile', 'smoke')
+    environment 'RESULT_BASENAME', loadtestProperty('result', "loadtest/k6/results/${loadtestProperty('scenario', 'smoke-seeded-login')}")
+
+    [
+            rate: 'RATE',
+            duration: 'DURATION',
+            vus: 'VUS',
+            iterations: 'ITERATIONS',
+            maxVus: 'MAX_VUS',
+            preAllocatedVus: 'PRE_ALLOCATED_VUS',
+            maxDuration: 'MAX_DURATION',
+            reservationExecutor: 'RESERVATION_EXECUTOR'
+    ].each { propertyName, envName ->
+        if (providers.gradleProperty(propertyName).isPresent()) {
+            environment envName, providers.gradleProperty(propertyName).get()
+        }
+    }
+
+    commandLine 'k6', 'run', rootProject.file('loadtest/k6/main.js').absolutePath
 }

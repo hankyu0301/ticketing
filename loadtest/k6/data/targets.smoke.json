@@ -1,0 +1,80 @@
+{
+  "baseUrl": "http://localhost:8080",
+  "userPool": {
+    "startMemberId": 1,
+    "count": 100000,
+    "emailPattern": "loadtest-user-%06d@test.com",
+    "nicknamePattern": "loadtest-user-%06d",
+    "password": "password1234!"
+  },
+  "concert": {
+    "scheduleId": 1,
+    "totalSeats": 50000
+  },
+  "auth": {
+    "users": {
+      "startMemberId": 1,
+      "count": 10
+    }
+  },
+  "queue": {
+    "enterUsers": {
+      "startMemberId": 1,
+      "count": 50
+    },
+    "rankPollingUsers": {
+      "startMemberId": 1001,
+      "count": 50
+    }
+  },
+  "reservation": {
+    "activeUsers": {
+      "startMemberId": 20001,
+      "count": 50
+    },
+    "uniqueSeats": {
+      "startSeatId": 1,
+      "count": 50
+    },
+    "contentionUsers": {
+      "startMemberId": 20101,
+      "count": 50
+    },
+    "contentionSeats": {
+      "startSeatId": 101,
+      "count": 3
+    }
+  },
+  "profiles": {
+    "smoke": {
+      "smoke-seeded-login": {
+        "vus": 5,
+        "iterations": 1,
+        "maxDuration": "1m"
+      },
+      "load-queue-enter": {
+        "rate": 5,
+        "duration": "20s",
+        "preAllocatedVUs": 10,
+        "maxVUs": 20
+      },
+      "load-queue-rank-polling": {
+        "rate": 5,
+        "duration": "20s",
+        "preAllocatedVUs": 10,
+        "maxVUs": 20
+      },
+      "load-reservation-unique": {
+        "vus": 10,
+        "iterations": 20,
+        "maxDuration": "2m"
+      },
+      "stress-reservation-contention": {
+        "rate": 10,
+        "duration": "20s",
+        "preAllocatedVUs": 20,
+        "maxVUs": 40
+      }
+    }
+  }
+}

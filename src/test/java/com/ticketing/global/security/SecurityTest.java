@@ -29,6 +29,7 @@ import static org.springframework.security.test.web.servlet.setup.SecurityMockMv
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -85,6 +86,17 @@ class SecurityTest {
         mockMvc.perform(get("/"))
                 .andDo(print())
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("CSRF bootstrap endpoint issues token and cookie")
+    @WithAnonymousUser
+    void csrfBootstrapEndpointIssuesTokenAndCookie() throws Exception {
+        mockMvc.perform(get("/api/v1/auth/csrf"))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.token").isNotEmpty())
+                .andExpect(cookie().exists("XSRF-TOKEN"));
     }
 
     @Test

@@ -37,3 +37,6 @@ out/
 .vscode/
 
 .gradle-user-home/
+.gradle-loadtest/
+loadtest/k6/results/*
+!loadtest/k6/results/.gitkeep

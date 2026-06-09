@@ -1,0 +1,49 @@
+spring:
+  rabbitmq:
+    dynamic: false
+  datasource:
+    hikari:
+      maximum-pool-size: 60
+      minimum-idle: 20
+
+server:
+  tomcat:
+    mbeanregistry:
+      enabled: true
+    threads:
+      max: 400
+      min-spare: 50
+    accept-count: 200
+
+mybatis:
+  configuration:
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+  health:
+    rabbit:
+      enabled: false
+  metrics:
+    tags:
+      application: ticketing-loadtest
+    distribution:
+      percentiles:
+        http.server.requests: 0.5, 0.9, 0.95, 0.99
+
+queue:
+  enter-batch-size: 500
+  estimated-throughput: 500
+  max-active-member: 1000
+  active-time-ms: 1800000
+
+ticketing:
+  payment:
+    rabbitmq:
+      listener-auto-startup: false

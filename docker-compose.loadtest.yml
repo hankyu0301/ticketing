@@ -1,0 +1,103 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ticketing-loadtest-app
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: loadtest
+      SPRING_DATASOURCE_URL: jdbc:mariadb://mariadb:3306/ticketing?useUnicode=true&characterEncoding=utf8&allowMultiQueries=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_RABBITMQ_DYNAMIC: "false"
+      TICKETING_PAYMENT_RABBITMQ_LISTENER_AUTO_STARTUP: "false"
+      QUEUE_ACTIVE_TIME_MS: 1800000
+      JAVA_OPTS: -Xms512m -Xmx1g -Dspring.devtools.restart.enabled=false
+    ports:
+      - "8080:8080"
+
+  mariadb-base:
+    image: mariadb:10.6
+    container_name: ticketing-loadtest-mariadb-base
+    profiles:
+      - base
+    environment:
+      MARIADB_DATABASE: ticketing
+      MARIADB_ROOT_PASSWORD: root
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --innodb-buffer-pool-size=512M
+      - --max-connections=300
+    volumes:
+      - ticketing-loadtest-base:/var/lib/mysql
+      - ./loadtest/fixtures/mysql/00_schema.sql:/docker-entrypoint-initdb.d/00_schema.sql:ro
+      - ./loadtest/fixtures/mysql/10_seed_large_base.sql:/docker-entrypoint-initdb.d/10_seed_large_base.sql:ro
+    healthcheck:
+      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  mariadb:
+    image: mariadb:10.6
+    container_name: ticketing-loadtest-mariadb
+    environment:
+      MARIADB_DATABASE: ticketing
+      MARIADB_ROOT_PASSWORD: root
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --innodb-buffer-pool-size=512M
+      - --max-connections=300
+      - --slow-query-log=1
+      - --log-output=TABLE
+      - --long-query-time=0.05
+    volumes:
+      - ticketing-loadtest-run:/var/lib/mysql
+      - ./loadtest/fixtures/mysql:/loadtest/mysql:ro
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    container_name: ticketing-loadtest-redis
+    volumes:
+      - ./loadtest/fixtures/redis:/loadtest/redis:ro
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  volume-copy:
+    image: alpine:3.20
+    profiles:
+      - tools
+    volumes:
+      - ticketing-loadtest-base:/from:ro
+      - ticketing-loadtest-run:/to
+    command:
+      - /bin/sh
+      - -c
+      - rm -rf /to/* /to/.[!.]* /to/..?* && cd /from && tar cf - . | tar xf - -C /to
+
+volumes:
+  ticketing-loadtest-base:
+    name: ticketing-loadtest-base
+  ticketing-loadtest-run:
+    name: ticketing-loadtest-run

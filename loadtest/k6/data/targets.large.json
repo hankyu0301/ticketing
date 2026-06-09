@@ -1,0 +1,167 @@
+{
+  "baseUrl": "http://localhost:8080",
+  "userPool": {
+    "startMemberId": 1,
+    "count": 100000,
+    "emailPattern": "loadtest-user-%06d@test.com",
+    "nicknamePattern": "loadtest-user-%06d",
+    "password": "password1234!"
+  },
+  "concert": {
+    "scheduleId": 1,
+    "totalSeats": 50000
+  },
+  "auth": {
+    "users": {
+      "startMemberId": 1,
+      "count": 1000
+    }
+  },
+  "queue": {
+    "enterUsers": {
+      "startMemberId": 1,
+      "count": 20000
+    },
+    "rankPollingUsers": {
+      "startMemberId": 1001,
+      "count": 19000
+    }
+  },
+  "reservation": {
+    "activeUsers": {
+      "startMemberId": 20001,
+      "count": 10000
+    },
+    "uniqueSeats": {
+      "startSeatId": 1,
+      "count": 50000
+    },
+    "contentionUsers": {
+      "startMemberId": 30001,
+      "count": 2000
+    },
+    "contentionSeats": {
+      "startSeatId": 10001,
+      "count": 20
+    }
+  },
+  "profiles": {
+    "smoke": {
+      "smoke-seeded-login": {
+        "vus": 10,
+        "iterations": 1,
+        "maxDuration": "1m"
+      },
+      "load-queue-enter": {
+        "rate": 10,
+        "duration": "30s",
+        "preAllocatedVUs": 20,
+        "maxVUs": 50
+      },
+      "load-queue-rank-polling": {
+        "rate": 10,
+        "duration": "30s",
+        "preAllocatedVUs": 20,
+        "maxVUs": 50
+      },
+      "load-reservation-unique": {
+        "vus": 20,
+        "iterations": 50,
+        "maxDuration": "2m"
+      },
+      "stress-reservation-contention": {
+        "rate": 20,
+        "duration": "30s",
+        "preAllocatedVUs": 40,
+        "maxVUs": 100
+      }
+    },
+    "baseline": {
+      "smoke-seeded-login": {
+        "vus": 50,
+        "iterations": 1,
+        "maxDuration": "2m"
+      },
+      "load-queue-enter": {
+        "rate": 100,
+        "duration": "2m",
+        "preAllocatedVUs": 150,
+        "maxVUs": 300
+      },
+      "load-queue-rank-polling": {
+        "rate": 200,
+        "duration": "2m",
+        "preAllocatedVUs": 200,
+        "maxVUs": 400
+      },
+      "load-reservation-unique": {
+        "vus": 300,
+        "iterations": 3000,
+        "maxDuration": "5m"
+      },
+      "stress-reservation-contention": {
+        "rate": 150,
+        "duration": "2m",
+        "preAllocatedVUs": 200,
+        "maxVUs": 500
+      }
+    },
+    "rps100": {
+      "load-reservation-unique": {
+        "rate": 100,
+        "duration": "10s",
+        "preAllocatedVUs": 150,
+        "maxVUs": 300
+      }
+    },
+    "rps300": {
+      "load-reservation-unique": {
+        "rate": 300,
+        "duration": "10s",
+        "preAllocatedVUs": 300,
+        "maxVUs": 600
+      }
+    },
+    "rps500": {
+      "load-reservation-unique": {
+        "rate": 500,
+        "duration": "10s",
+        "preAllocatedVUs": 500,
+        "maxVUs": 1000
+      }
+    },
+    "rps500Long": {
+      "load-reservation-unique": {
+        "rate": 500,
+        "duration": "60s",
+        "preAllocatedVUs": 500,
+        "maxVUs": 1000
+      }
+    },
+    "stress": {
+      "load-queue-enter": {
+        "rate": 300,
+        "duration": "3m",
+        "preAllocatedVUs": 400,
+        "maxVUs": 800
+      },
+      "load-queue-rank-polling": {
+        "rate": 500,
+        "duration": "3m",
+        "preAllocatedVUs": 500,
+        "maxVUs": 1000
+      },
+      "load-reservation-unique": {
+        "vus": 800,
+        "iterations": 10000,
+        "maxDuration": "10m"
+      },
+      "stress-reservation-contention": {
+        "rate": 400,
+        "duration": "3m",
+        "preAllocatedVUs": 500,
+        "maxVUs": 1000
+      }
+    }
+  }
+}
