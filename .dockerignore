@@ -1,0 +1,12 @@
+.ai/
+.git/
+.gradle/
+.gradle-user-home/
+.gradle-loadtest/
+.idea/
+build/
+loadtest/k6/results/
+out/
+*.iml
+*.iws
+*.ipr
