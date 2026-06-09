@@ -1,5 +1,7 @@
-package com.ticketing.domain.payment.exception;
+package com.ticketing.api.payment.controller;
 
+import com.ticketing.domain.payment.exception.PaymentBadRequestException;
+import com.ticketing.domain.payment.exception.PaymentNotFoundException;
 import com.ticketing.global.common.response.ResponseDTO;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
