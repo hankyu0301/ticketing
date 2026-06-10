@@ -62,9 +62,10 @@ export function recordQueueTimeToActive(waitedMs, scenarioName) {
 
 /**
  * 예약 성공, 예상 가능한 비즈니스 실패, 예상하지 못한 실패 비율을 기록한다.
+ * extraTags가 있으면 좌석군 같은 시나리오별 분석 tag를 함께 기록한다.
  */
-export function recordReservation(status, scenarioName, allowBusinessFailure) {
-    const tags = { scenario: scenarioName, status: String(status) };
+export function recordReservation(status, scenarioName, allowBusinessFailure, extraTags = {}) {
+    const tags = { scenario: scenarioName, status: String(status), ...extraTags };
     reservationSuccessRate.add(status === 201 ? 1 : 0, tags);
     reservationBusinessFailureRate.add(status === 400 ? 1 : 0, tags);
 

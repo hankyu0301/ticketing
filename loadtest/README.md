@@ -84,7 +84,8 @@ Content-Type: application/json
 - `load-reservation-unique`
   - VU별 세션을 한 번 만들고, 고유 좌석 예약 처리량을 측정한다.
 - `stress-reservation-contention`
-  - 여러 활성 사용자가 좁은 좌석 범위에 몰릴 때 성공/비즈니스 실패를 분리해 측정한다.
+  - 여러 활성 사용자가 인기 좌석군에 몰릴 때 성공/비즈니스 실패를 분리해 측정한다.
+  - `targets.*.json`의 `reservation.contentionZones` weight를 기준으로 front/middle/normal 구역에 요청을 분산한다.
 
 ## 자주 쓰는 명령
 
@@ -120,6 +121,33 @@ Rank polling:
 ./gradlew loadtestResetRedisQueue
 ./gradlew loadtestSeedRedisQueue -PactiveStartMemberId=30001 -PactiveCount=2000 -PwaitingCount=0
 ./gradlew loadtestRunK6 -Pscenario=stress-reservation-contention -Ptargets=loadtest/k6/data/targets.large.json -Pprofile=baseline
+```
+
+인기 좌석군 경합은 다음 설정을 사용한다.
+
+| 구역 | 좌석 범위 | weight | 의미 |
+| --- | --- | ---: | --- |
+| `front` | `10001`부터 100석 | 60 | 가장 인기 있는 좌석군 |
+| `middle` | `10101`부터 400석 | 30 | 중간 인기 좌석군 |
+| `normal` | `10501`부터 1500석 | 10 | 일반 좌석군 |
+
+weight는 요청 분포를 의미한다. 예를 들어 large target에서는 전체 예약 시도 중 약 60%가 `front`, 30%가 `middle`, 10%가 `normal` 좌석군으로 향한다. 좌석 선택은 랜덤이 아니라 iteration index 기반으로 결정되므로 같은 설정에서 재현 가능한 결과를 얻을 수 있다.
+
+active admission 한계를 비교할 때는 같은 시나리오에 active 사용자 수와 k6 VU 상한을 함께 바꿔 실행한다.
+
+```bash
+./gradlew loadtestSeedRedisQueue -PactiveStartMemberId=30001 -PactiveCount=500 -PwaitingCount=0
+./gradlew loadtestRunK6 -Pscenario=stress-reservation-contention -Ptargets=loadtest/k6/data/targets.large.json -Pprofile=baseline -PpreAllocatedVus=500 -PmaxVus=500
+```
+
+테스트 후에는 대상 좌석군에서 중복 예약이 없는지 확인한다.
+
+```sql
+SELECT seat_id, COUNT(*) AS reservation_count
+FROM reservations
+WHERE schedule_id = 1
+GROUP BY seat_id
+HAVING COUNT(*) > 1;
 ```
 
 ## 설정 Override
