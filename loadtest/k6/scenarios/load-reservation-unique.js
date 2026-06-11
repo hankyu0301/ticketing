@@ -83,7 +83,7 @@ export function run(data) {
 
     const response = createReservation(scheduleId, seatId, authSession, scenarioName);
 
-    recordReservation(response.status, scenarioName, false);
+    recordReservation(response.status, scenarioName, false, {}, response.timings.duration);
 
     if (!expectStatus(response, [201], 'reservation-create')) {
         recordUnexpectedFailure(scenarioName, 'reservation-create', response.status);

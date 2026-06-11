@@ -113,7 +113,7 @@ export function run() {
     const metricTags = { seat_zone: picked.zone.name };
     const response = createReservation(scheduleId, seatId, authSession, scenarioName, metricTags);
 
-    recordReservation(response.status, scenarioName, true, metricTags);
+    recordReservation(response.status, scenarioName, true, metricTags, response.timings.duration);
 
     if (!expectStatus(response, [201, 400], 'reservation-contention')) {
         recordUnexpectedFailure(scenarioName, 'reservation-create', response.status);

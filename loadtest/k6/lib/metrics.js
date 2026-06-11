@@ -20,6 +20,10 @@ export const queueTimeToActiveTrend = new Trend('queue_time_to_active_ms');
 export const reservationSuccessRate = new Rate('reservation_success_rate');
 export const reservationBusinessFailureRate = new Rate('reservation_business_failure_rate');
 export const reservationUnexpectedFailureRate = new Rate('reservation_unexpected_failure_rate');
+export const reservationDurationTrend = new Trend('reservation_duration_ms');
+export const reservationSuccessDurationTrend = new Trend('reservation_success_duration_ms');
+export const reservationBusinessFailureDurationTrend = new Trend('reservation_business_failure_duration_ms');
+export const reservationUnexpectedFailureDurationTrend = new Trend('reservation_unexpected_failure_duration_ms');
 
 /**
  * 시나리오, step, HTTP status tag와 함께 예상하지 못한 실패를 기록한다.
@@ -64,7 +68,7 @@ export function recordQueueTimeToActive(waitedMs, scenarioName) {
  * 예약 성공, 예상 가능한 비즈니스 실패, 예상하지 못한 실패 비율을 기록한다.
  * extraTags가 있으면 좌석군 같은 시나리오별 분석 tag를 함께 기록한다.
  */
-export function recordReservation(status, scenarioName, allowBusinessFailure, extraTags = {}) {
+export function recordReservation(status, scenarioName, allowBusinessFailure, extraTags = {}, durationMs = null) {
     const tags = { scenario: scenarioName, status: String(status), ...extraTags };
     reservationSuccessRate.add(status === 201 ? 1 : 0, tags);
     reservationBusinessFailureRate.add(status === 400 ? 1 : 0, tags);
@@ -74,4 +78,22 @@ export function recordReservation(status, scenarioName, allowBusinessFailure, ex
         : status !== 201;
 
     reservationUnexpectedFailureRate.add(isUnexpected ? 1 : 0, tags);
+
+    if (durationMs === null || durationMs === undefined) {
+        return;
+    }
+
+    reservationDurationTrend.add(durationMs, tags);
+
+    if (status === 201) {
+        reservationSuccessDurationTrend.add(durationMs, tags);
+        return;
+    }
+
+    if (allowBusinessFailure && status === 400) {
+        reservationBusinessFailureDurationTrend.add(durationMs, tags);
+        return;
+    }
+
+    reservationUnexpectedFailureDurationTrend.add(durationMs, tags);
 }

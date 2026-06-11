@@ -86,6 +86,9 @@ Content-Type: application/json
 - `stress-reservation-contention`
   - 여러 활성 사용자가 인기 좌석군에 몰릴 때 성공/비즈니스 실패를 분리해 측정한다.
   - `targets.*.json`의 `reservation.contentionZones` weight를 기준으로 front/middle/normal 구역에 요청을 분산한다.
+- `burst-reservation-contention`
+  - loadtest 세션을 사전에 발급한 뒤, 짧은 시간에 같은 좌석 또는 좁은 좌석군으로 예약 요청을 몰아 lock 경합을 관측한다.
+  - `targets.burst-contention.json`의 `reservation.burstSeats.count`를 1, 10, 100으로 바꿔 단일 좌석과 좁은 좌석군 burst를 나눠 실행할 수 있다.
 
 ## 자주 쓰는 명령
 
@@ -148,6 +151,15 @@ FROM reservations
 WHERE schedule_id = 1
 GROUP BY seat_id
 HAVING COUNT(*) > 1;
+```
+
+Burst 좌석 경합:
+
+```bash
+./gradlew loadtestResetHotSchedule
+./gradlew loadtestResetRedisQueue
+./gradlew loadtestSeedRedisQueue -PactiveStartMemberId=40001 -PactiveCount=500 -PwaitingCount=0
+./gradlew loadtestRunK6 -Pscenario=burst-reservation-contention -Ptargets=loadtest/k6/data/targets.burst-contention.json -Pprofile=burst300
 ```
 
 ## 설정 Override
