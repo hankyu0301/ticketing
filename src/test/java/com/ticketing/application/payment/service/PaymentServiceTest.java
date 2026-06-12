@@ -4,6 +4,7 @@ import com.ticketing.api.payment.dto.PaymentResponse;
 import com.ticketing.domain.payment.model.Payment;
 import com.ticketing.domain.reservation.model.Reservation;
 import com.ticketing.domain.seat.model.Seat;
+import com.ticketing.application.seat.event.SeatUnavailableCacheMarkSoldOutEvent;
 import com.ticketing.infrastructure.persistence.payment.PaymentMapper;
 import com.ticketing.infrastructure.persistence.reservation.ReservationMapper;
 import com.ticketing.infrastructure.persistence.seat.mapper.SeatMapper;
@@ -70,7 +71,7 @@ class PaymentServiceTest {
         verify(paymentMapper).update(paymentCaptor.capture());
         verify(reservationMapper).update(reservationCaptor.capture());
         verify(seatMapper).update(seatCaptor.capture());
-        verify(eventPublisher, never()).publishEvent(any());
+        verify(eventPublisher).publishEvent(new SeatUnavailableCacheMarkSoldOutEvent(1L, seatId));
 
         Payment updatedPayment = paymentCaptor.getValue();
         Reservation updatedReservation = reservationCaptor.getValue();
@@ -109,6 +110,7 @@ class PaymentServiceTest {
         verify(paymentMapper, never()).update(any(Payment.class));
         verify(reservationMapper, never()).update(any(Reservation.class));
         verify(seatMapper, never()).update(any(Seat.class));
+        verify(eventPublisher, never()).publishEvent(new SeatUnavailableCacheMarkSoldOutEvent(1L, seatId));
 
         assertThat(response.getStatus()).isEqualTo("PENDING");
     }

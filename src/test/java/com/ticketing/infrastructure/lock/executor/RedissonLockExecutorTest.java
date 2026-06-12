@@ -1,5 +1,6 @@
 package com.ticketing.infrastructure.lock.executor;
 
+import com.ticketing.infrastructure.lock.exception.LockAcquisitionFailureException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -53,6 +54,6 @@ class RedissonLockExecutorTest {
         given(lock.isLocked()).willReturn(false);
 
         assertThatThrownBy(() -> redissonLockExecutor.execute("seat:1", () -> "reserved"))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(LockAcquisitionFailureException.class);
     }
 }

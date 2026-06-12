@@ -52,7 +52,7 @@ class PessimisticLockReservationServiceTest {
 
         given(reservationExpirationPolicy.calculateExpiredAt(any(LocalDateTime.class)))
                 .willAnswer(invocation -> invocation.getArgument(0, LocalDateTime.class).plusMinutes(30));
-        given(seatMapper.findByIdWithPessimisticLock(seatId)).willReturn(Optional.of(seat));
+        given(seatMapper.findByIdForUpdate(seatId)).willReturn(Optional.of(seat));
 
         reservationService.reserve(seatId, memberId, scheduleId);
 
@@ -74,7 +74,7 @@ class PessimisticLockReservationServiceTest {
         Long requestedScheduleId = 100L;
         Seat seat = createSeat(200L, seatId);
 
-        given(seatMapper.findByIdWithPessimisticLock(seatId)).willReturn(Optional.of(seat));
+        given(seatMapper.findByIdForUpdate(seatId)).willReturn(Optional.of(seat));
 
         assertThatThrownBy(() -> reservationService.reserve(seatId, memberId, requestedScheduleId))
                 .isInstanceOf(ReservationBadRequestException.class)
