@@ -58,10 +58,12 @@ export function createSummaryHandler(scenarioName) {
             metricLine(data, 'queue_time_to_active_ms', 'queue_time_to_active_ms'),
             metricLine(data, 'reservation_success_rate', 'reservation_success_rate'),
             metricLine(data, 'reservation_business_failure_rate', 'reservation_business_failure_rate'),
+            metricLine(data, 'reservation_lock_timeout_rate', 'reservation_lock_timeout_rate'),
             metricLine(data, 'reservation_unexpected_failure_rate', 'reservation_unexpected_failure_rate'),
             metricLine(data, 'reservation_duration_ms', 'reservation_duration_ms'),
             metricLine(data, 'reservation_success_duration_ms', 'reservation_success_duration_ms'),
             metricLine(data, 'reservation_business_failure_duration_ms', 'reservation_business_failure_duration_ms'),
+            metricLine(data, 'reservation_lock_timeout_duration_ms', 'reservation_lock_timeout_duration_ms'),
             metricLine(data, 'reservation_unexpected_failure_duration_ms', 'reservation_unexpected_failure_duration_ms'),
             metricLine(data, 'unexpected_failure_rate', 'unexpected_failure_rate')
         ].join('\n');

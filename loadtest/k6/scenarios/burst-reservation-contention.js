@@ -65,7 +65,7 @@ export function run(data) {
 
     recordReservation(response.status, scenarioName, true, metricTags, response.timings.duration);
 
-    if (!expectStatus(response, [201, 400], 'burst-reservation-contention')) {
+    if (!expectStatus(response, [201, 400, 429], 'burst-reservation-contention')) {
         recordUnexpectedFailure(scenarioName, 'reservation-create', response.status);
         throw new Error(`Unexpected burst contention response for seat ${seatId}: ${parseResponseMessage(response)}`);
     }

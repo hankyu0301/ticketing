@@ -47,7 +47,7 @@ public class LoadtestReservationMetricsAspect {
         return record(joinPoint, "ticketing.loadtest.db.seat.find");
     }
 
-    @Around("execution(* com.ticketing.infrastructure.persistence.seat.mapper.SeatMapper.findByIdWithPessimisticLock(..))")
+    @Around("execution(* com.ticketing.infrastructure.persistence.seat.mapper.SeatMapper.findByIdForUpdate(..))")
     public Object recordSeatFindByIdForUpdate(ProceedingJoinPoint joinPoint) throws Throwable {
         return record(joinPoint, "ticketing.loadtest.db.seat.find_for_update");
     }

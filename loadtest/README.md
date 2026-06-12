@@ -89,6 +89,7 @@ Content-Type: application/json
 - `burst-reservation-contention`
   - loadtest 세션을 사전에 발급한 뒤, 짧은 시간에 같은 좌석 또는 좁은 좌석군으로 예약 요청을 몰아 lock 경합을 관측한다.
   - `targets.burst-contention.json`의 `reservation.burstSeats.count`를 1, 10, 100으로 바꿔 단일 좌석과 좁은 좌석군 burst를 나눠 실행할 수 있다.
+  - `201`은 예약 성공, `400`은 이미 점유/판매된 좌석 비즈니스 실패, `429`는 lock wait timeout에 따른 빠른 실패로 분리해 집계한다.
 
 ## 자주 쓰는 명령
 

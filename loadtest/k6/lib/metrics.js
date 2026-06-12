@@ -19,10 +19,14 @@ export const queueTimeToActiveTrend = new Trend('queue_time_to_active_ms');
 // 예약 결과를 기록하는 metric.
 export const reservationSuccessRate = new Rate('reservation_success_rate');
 export const reservationBusinessFailureRate = new Rate('reservation_business_failure_rate');
+// lock wait timeout으로 빠르게 거절된 429 응답을 따로 기록하는 metric.
+export const reservationLockTimeoutRate = new Rate('reservation_lock_timeout_rate');
 export const reservationUnexpectedFailureRate = new Rate('reservation_unexpected_failure_rate');
 export const reservationDurationTrend = new Trend('reservation_duration_ms');
 export const reservationSuccessDurationTrend = new Trend('reservation_success_duration_ms');
 export const reservationBusinessFailureDurationTrend = new Trend('reservation_business_failure_duration_ms');
+// lock wait timeout 응답의 지연 시간을 다른 예약 실패와 분리해 기록하는 metric.
+export const reservationLockTimeoutDurationTrend = new Trend('reservation_lock_timeout_duration_ms');
 export const reservationUnexpectedFailureDurationTrend = new Trend('reservation_unexpected_failure_duration_ms');
 
 /**
@@ -72,9 +76,10 @@ export function recordReservation(status, scenarioName, allowBusinessFailure, ex
     const tags = { scenario: scenarioName, status: String(status), ...extraTags };
     reservationSuccessRate.add(status === 201 ? 1 : 0, tags);
     reservationBusinessFailureRate.add(status === 400 ? 1 : 0, tags);
+    reservationLockTimeoutRate.add(status === 429 ? 1 : 0, tags);
 
     const isUnexpected = allowBusinessFailure
-        ? !(status === 201 || status === 400)
+        ? !(status === 201 || status === 400 || status === 429)
         : status !== 201;
 
     reservationUnexpectedFailureRate.add(isUnexpected ? 1 : 0, tags);
@@ -92,6 +97,11 @@ export function recordReservation(status, scenarioName, allowBusinessFailure, ex
 
     if (allowBusinessFailure && status === 400) {
         reservationBusinessFailureDurationTrend.add(durationMs, tags);
+        return;
+    }
+
+    if (allowBusinessFailure && status === 429) {
+        reservationLockTimeoutDurationTrend.add(durationMs, tags);
         return;
     }
 

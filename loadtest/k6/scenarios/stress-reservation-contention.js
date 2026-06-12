@@ -115,7 +115,7 @@ export function run() {
 
     recordReservation(response.status, scenarioName, true, metricTags, response.timings.duration);
 
-    if (!expectStatus(response, [201, 400], 'reservation-contention')) {
+    if (!expectStatus(response, [201, 400, 429], 'reservation-contention')) {
         recordUnexpectedFailure(scenarioName, 'reservation-create', response.status);
         throw new Error(`Unexpected contention response for seat ${seatId}: ${parseResponseMessage(response)}`);
     }
