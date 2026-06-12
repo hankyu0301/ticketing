@@ -1,5 +1,6 @@
 package com.ticketing.infrastructure.lock.repository;
 
+import com.ticketing.infrastructure.lock.exception.LockAcquisitionFailureException;
 import com.ticketing.infrastructure.lock.mapper.NamedLockMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +21,9 @@ public class NamedLockRepository {
 
     public void getLock(String lockName) {
         Integer result = namedLockMapper.getLock(lockName, resolveTimeoutSeconds());
-        checkResult(result, "NamedLock 락 획득 실패: " + lockName);
+        if (result == null || result != 1) {
+            throw new LockAcquisitionFailureException("NamedLock 락 획득 실패 : " + lockName);
+        }
     }
 
     public void releaseLock(String lockName) {

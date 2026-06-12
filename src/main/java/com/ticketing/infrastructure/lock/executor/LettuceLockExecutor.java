@@ -1,5 +1,6 @@
 package com.ticketing.infrastructure.lock.executor;
 
+import com.ticketing.infrastructure.lock.exception.LockAcquisitionFailureException;
 import com.ticketing.infrastructure.lock.repository.RedisLockRepository;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
@@ -49,7 +50,7 @@ public class LettuceLockExecutor implements LockExecutor {
 
         while (!Boolean.TRUE.equals(redisLockRepository.lock(lockName, token, leaseTime))) {
             if (System.nanoTime() >= deadline) {
-                throw new IllegalArgumentException(LOCK_ACQUISITION_TIMEOUT_MESSAGE);
+                throw new LockAcquisitionFailureException(LOCK_ACQUISITION_TIMEOUT_MESSAGE);
             }
 
             try {

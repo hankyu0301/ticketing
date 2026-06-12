@@ -3,10 +3,12 @@ package com.ticketing.application.reservation.service;
 import com.ticketing.domain.payment.model.Payment;
 import com.ticketing.domain.reservation.model.Reservation;
 import com.ticketing.domain.seat.model.Seat;
+import com.ticketing.application.seat.event.SeatUnavailableCacheEvictEvent;
 import com.ticketing.infrastructure.persistence.payment.PaymentMapper;
 import com.ticketing.infrastructure.persistence.reservation.ReservationMapper;
 import com.ticketing.infrastructure.persistence.seat.mapper.SeatMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +22,7 @@ public class ReservationExpirationService {
     private final ReservationMapper reservationMapper;
     private final SeatMapper seatMapper;
     private final PaymentMapper paymentMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(readOnly = true)
     public List<Long> findExpiredPendingReservationIds(LocalDateTime now, int processLimit) {
@@ -38,7 +41,7 @@ public class ReservationExpirationService {
             return;
         }
 
-        Seat seat = seatMapper.findByIdWithPessimisticLock(reservation.getSeatId()).orElse(null);
+        Seat seat = seatMapper.findByIdForUpdate(reservation.getSeatId()).orElse(null);
         paymentMapper.findByReservationId(reservationId)
                 .filter(payment -> payment.getStatus() == Payment.PaymentStatus.PENDING)
                 .ifPresent(payment -> {
@@ -52,6 +55,9 @@ public class ReservationExpirationService {
         if (seat != null) {
             seat.release();
             seatMapper.update(seat);
+            eventPublisher.publishEvent(
+                    new SeatUnavailableCacheEvictEvent(reservation.getScheduleId(), reservation.getSeatId())
+            );
         }
     }
 }

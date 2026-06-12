@@ -44,6 +44,8 @@ queue:
   active-time-ms: 1800000
 
 ticketing:
+  lock:
+    wait-time-ms: 200
   payment:
     rabbitmq:
       listener-auto-startup: false

@@ -16,12 +16,6 @@
         WHERE payment_id = #{paymentId}
     </select>
 
-    <select id="findReservationIdByPaymentId" resultType="long">
-        SELECT reservation_id
-        FROM payments
-        WHERE payment_id = #{paymentId}
-    </select>
-
     <select id="findByReservationId" resultType="com.ticketing.domain.payment.model.Payment">
         SELECT payment_id, reservation_id, member_id, amount, status, paid_at, created_at, updated_at
         FROM payments
