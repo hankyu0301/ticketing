@@ -235,12 +235,16 @@ export function lookupSeats(scheduleId, scenarioName) {
 
 /**
  * 하나의 schedule과 seat에 대해 예약 생성 endpoint를 호출한다.
+ * extraTags가 있으면 좌석군 같은 시나리오별 분석 tag를 함께 기록한다.
  */
-export function createReservation(scheduleId, seatId, authSession, scenarioName) {
+export function createReservation(scheduleId, seatId, authSession, scenarioName, extraTags = {}) {
     return postRequest(
         '/api/v1/reservations',
         JSON.stringify({ scheduleId, seatId }),
-        withSessionCookies(jsonParams(authSession.csrfToken, { scenario: scenarioName, endpoint: 'reservation-create' }), authSession)
+        withSessionCookies(
+            jsonParams(authSession.csrfToken, { scenario: scenarioName, endpoint: 'reservation-create', ...extraTags }),
+            authSession
+        )
     );
 }
 

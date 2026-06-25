@@ -1,0 +1,130 @@
+{
+  "baseUrl": "http://localhost:8080",
+  "userPool": {
+    "startMemberId": 1,
+    "count": 100000,
+    "emailPattern": "loadtest-user-%06d@test.com",
+    "nicknamePattern": "loadtest-user-%06d",
+    "password": "password1234!"
+  },
+  "concert": {
+    "scheduleId": 1,
+    "totalSeats": 50000
+  },
+  "auth": {
+    "users": {
+      "startMemberId": 1,
+      "count": 1000
+    }
+  },
+  "queue": {
+    "enterUsers": {
+      "startMemberId": 1,
+      "count": 20000
+    },
+    "rankPollingUsers": {
+      "startMemberId": 1001,
+      "count": 19000
+    }
+  },
+  "reservation": {
+    "activeUsers": {
+      "startMemberId": 20001,
+      "count": 10000
+    },
+    "uniqueSeats": {
+      "startSeatId": 1,
+      "count": 50000
+    },
+    "contentionUsers": {
+      "startMemberId": 30001,
+      "count": 2000
+    },
+    "contentionSeats": {
+      "startSeatId": 10001,
+      "count": 500
+    },
+    "contentionZones": [
+      {
+        "name": "front",
+        "startSeatId": 10001,
+        "count": 50,
+        "weight": 60
+      },
+      {
+        "name": "middle",
+        "startSeatId": 10051,
+        "count": 150,
+        "weight": 30
+      },
+      {
+        "name": "normal",
+        "startSeatId": 10201,
+        "count": 300,
+        "weight": 10
+      }
+    ]
+  },
+  "profiles": {
+    "smoke": {
+      "smoke-seeded-login": {
+        "vus": 10,
+        "iterations": 1,
+        "maxDuration": "1m"
+      },
+      "load-queue-enter": {
+        "rate": 10,
+        "duration": "30s",
+        "preAllocatedVUs": 20,
+        "maxVUs": 50
+      },
+      "load-queue-rank-polling": {
+        "rate": 10,
+        "duration": "30s",
+        "preAllocatedVUs": 20,
+        "maxVUs": 50
+      },
+      "load-reservation-unique": {
+        "vus": 20,
+        "iterations": 50,
+        "maxDuration": "2m"
+      },
+      "stress-reservation-contention": {
+        "rate": 20,
+        "duration": "30s",
+        "preAllocatedVUs": 40,
+        "maxVUs": 100
+      }
+    },
+    "baseline": {
+      "smoke-seeded-login": {
+        "vus": 50,
+        "iterations": 1,
+        "maxDuration": "2m"
+      },
+      "load-queue-enter": {
+        "rate": 100,
+        "duration": "2m",
+        "preAllocatedVUs": 150,
+        "maxVUs": 300
+      },
+      "load-queue-rank-polling": {
+        "rate": 200,
+        "duration": "2m",
+        "preAllocatedVUs": 200,
+        "maxVUs": 400
+      },
+      "load-reservation-unique": {
+        "vus": 300,
+        "iterations": 3000,
+        "maxDuration": "5m"
+      },
+      "stress-reservation-contention": {
+        "rate": 150,
+        "duration": "2m",
+        "preAllocatedVUs": 200,
+        "maxVUs": 500
+      }
+    }
+  }
+}

@@ -1,5 +1,6 @@
 package com.ticketing.infrastructure.lock.executor;
 
+import com.ticketing.infrastructure.lock.exception.LockAcquisitionFailureException;
 import com.ticketing.infrastructure.lock.repository.RedisLockRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -46,6 +47,18 @@ class LettuceLockExecutorTest {
 
         assertThat(result).isEqualTo("reserved");
         verify(redisLockRepository).unlock(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("Lettuce 락을 지정 시간 안에 얻지 못하면 락 획득 실패 예외를 던진다")
+    void execute_fail_whenLockAcquisitionTimeout() {
+        ReflectionTestUtils.setField(lettuceLockExecutor, "waitTimeMs", 1L);
+        ReflectionTestUtils.setField(lettuceLockExecutor, "retryIntervalMs", 1L);
+        ReflectionTestUtils.setField(lettuceLockExecutor, "leaseTimeMs", 3000L);
+        given(redisLockRepository.lock(anyString(), anyString(), any())).willReturn(false);
+
+        assertThatThrownBy(() -> lettuceLockExecutor.execute("seat:1", () -> "reserved"))
+                .isInstanceOf(LockAcquisitionFailureException.class);
     }
 
     @Test

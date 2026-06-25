@@ -7,6 +7,7 @@ import com.ticketing.domain.payment.model.Payment;
 import com.ticketing.domain.reservation.model.Reservation;
 import com.ticketing.domain.seat.exception.SeatNotFoundException;
 import com.ticketing.domain.seat.model.Seat;
+import com.ticketing.application.seat.event.SeatUnavailableCacheMarkSoldOutEvent;
 import com.ticketing.infrastructure.persistence.payment.PaymentMapper;
 import com.ticketing.infrastructure.persistence.reservation.ReservationMapper;
 import com.ticketing.infrastructure.persistence.seat.mapper.SeatMapper;
@@ -127,5 +128,8 @@ public class PaymentService {
         paymentMapper.update(payment);
         reservationMapper.update(reservation);
         seatMapper.update(seat);
+        eventPublisher.publishEvent(
+                new SeatUnavailableCacheMarkSoldOutEvent(reservation.getScheduleId(), reservation.getSeatId())
+        );
     }
 }

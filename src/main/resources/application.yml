@@ -67,11 +67,14 @@ scheduler:
 ticketing:
   lock:
     strategy: REDISSON
-    wait-time-ms: 10000
+    wait-time-ms: 200
     retry-interval-ms: 100
     lease-time-ms: 3000
   reservation:
     hold-duration: PT30M
+    unavailable-cache:
+      enabled: true
+      temporary-ttl-buffer: PT1M
     expiration:
       scan-delay-ms: 60000
       process-limit: 300

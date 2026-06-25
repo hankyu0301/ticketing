@@ -1,5 +1,6 @@
 package com.ticketing.infrastructure.lock.executor;
 
+import com.ticketing.infrastructure.lock.exception.LockAcquisitionFailureException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
@@ -31,7 +32,7 @@ public class RedissonLockExecutor implements LockExecutor {
 
             if (!available) {
                 log.warn("Redisson lock acquisition failed: {}", lockName);
-                throw new IllegalArgumentException("지정한 시간 안에 락을 획득하지 못했습니다.");
+                throw new LockAcquisitionFailureException("Redisson 락 획득 실패: " + lockName);
             }
 
             return supplier.get();

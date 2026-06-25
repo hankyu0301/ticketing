@@ -206,7 +206,7 @@ tasks.register('loadtestExplainReservationQueries', Exec) {
     def processLimit = loadtestSqlPositiveIntProperty('processLimit', '300')
     commandLine 'docker', 'exec', 'ticketing-loadtest-mariadb',
             'mariadb', '-uroot', '-proot', 'ticketing',
-            '-e', "SELECT 'SeatMapper.findByIdWithPessimisticLock' AS mapper_query; " +
+            '-e', "SELECT 'SeatMapper.findByIdForUpdate' AS mapper_query; " +
                     "EXPLAIN SELECT seat_id, schedule_id, seat_no, grade, price, member_id, status, updated_at, created_at " +
                     "FROM seats WHERE seat_id = ${seatId} FOR UPDATE; " +
                     "SELECT 'SeatMapper.update' AS mapper_query; " +
@@ -238,6 +238,7 @@ tasks.register('loadtestResetRedisQueue', Exec) {
             "queue:{${scheduleId}}:wait",
             "queue:{${scheduleId}}:score",
             'queue:processing_schedules',
+            "seat:unavailable:{${scheduleId}}:ids",
             ',', scheduleId
 }
 

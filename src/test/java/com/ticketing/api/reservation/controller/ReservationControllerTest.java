@@ -7,6 +7,7 @@ import com.ticketing.api.reservation.dto.ReservationResponse;
 import com.ticketing.application.reservation.service.ReservationService;
 import com.ticketing.domain.reservation.exception.ReservationBadRequestException;
 import com.ticketing.domain.reservation.exception.ReservationErrorMessage;
+import com.ticketing.domain.reservation.exception.ReservationTooManyRequestsException;
 import com.ticketing.domain.reservation.model.Reservation;
 import com.ticketing.global.security.service.CustomUserDetails;
 import com.ticketing.global.security.service.SessionMember;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -36,6 +38,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(ReservationController.class)
@@ -157,6 +160,39 @@ class ReservationControllerTest {
         resultActions
                 .andExpect(status().isBadRequest())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString(ReservationErrorMessage.SEAT_NOT_BELONG_TO_SCHEDULE)))
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("락 획득 대기 시간이 초과되면 429 Too Many Requests와 Retry-After를 반환한다.")
+    void createFailLockTimeout() throws Exception {
+        ReservationCreateRequest request = new ReservationCreateRequest();
+        ReflectionTestUtils.setField(request, "scheduleId", 1L);
+        ReflectionTestUtils.setField(request, "seatId", 1L);
+
+        Long memberId = 1L;
+        CustomUserDetails mockPrincipal = org.mockito.Mockito.mock(CustomUserDetails.class);
+        SessionMember mockSessionMember = org.mockito.Mockito.mock(SessionMember.class);
+
+        given(mockPrincipal.getSessionMember()).willReturn(mockSessionMember);
+        given(mockSessionMember.getMemberId()).willReturn(memberId);
+        given(mockPrincipal.getAuthorities()).willReturn(Collections.emptyList());
+
+        Authentication auth = new UsernamePasswordAuthenticationToken(mockPrincipal, null, mockPrincipal.getAuthorities());
+
+        given(reservationService.reserve(anyLong(), any(ReservationCreateRequest.class)))
+                .willThrow(new ReservationTooManyRequestsException(ReservationErrorMessage.RESERVATION_TOO_BUSY));
+
+        ResultActions resultActions = mockMvc.perform(post("/api/v1/reservations")
+                .with(csrf())
+                .with(authentication(auth))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)));
+
+        resultActions
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string(HttpHeaders.RETRY_AFTER, "1"))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(ReservationErrorMessage.RESERVATION_TOO_BUSY)))
                 .andDo(print());
     }
 

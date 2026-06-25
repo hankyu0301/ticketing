@@ -43,7 +43,27 @@
     "contentionSeats": {
       "startSeatId": 101,
       "count": 3
-    }
+    },
+    "contentionZones": [
+      {
+        "name": "front",
+        "startSeatId": 101,
+        "count": 5,
+        "weight": 70
+      },
+      {
+        "name": "middle",
+        "startSeatId": 106,
+        "count": 10,
+        "weight": 20
+      },
+      {
+        "name": "normal",
+        "startSeatId": 116,
+        "count": 20,
+        "weight": 10
+      }
+    ]
   },
   "profiles": {
     "smoke": {

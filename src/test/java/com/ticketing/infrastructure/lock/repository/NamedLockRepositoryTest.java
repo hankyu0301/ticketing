@@ -1,5 +1,6 @@
 package com.ticketing.infrastructure.lock.repository;
 
+import com.ticketing.infrastructure.lock.exception.LockAcquisitionFailureException;
 import com.ticketing.infrastructure.lock.mapper.NamedLockMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -51,7 +52,6 @@ class NamedLockRepositoryTest {
         given(namedLockMapper.getLock("seat:1", 1)).willReturn(0);
 
         assertThatThrownBy(() -> namedLockRepository.getLock("seat:1"))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("NamedLock 락 획득 실패");
+                .isInstanceOf(LockAcquisitionFailureException.class);
     }
 }

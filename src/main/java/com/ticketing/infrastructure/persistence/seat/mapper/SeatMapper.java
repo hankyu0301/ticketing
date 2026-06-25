@@ -17,8 +17,8 @@ public interface SeatMapper {
 
     Optional<Seat> findById(Long seatId);
 
-    // (비관적 락) 예약 시 사용 (SELECT ... FOR UPDATE)
-    Optional<Seat> findByIdWithPessimisticLock(Long seatId);
+    // 좌석 예약 생성 시 사용하는 비관적 락 조회 (SELECT ... FOR UPDATE)
+    Optional<Seat> findByIdForUpdate(Long seatId);
 
     void update(Seat seat);
 }

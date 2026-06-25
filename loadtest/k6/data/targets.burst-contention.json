@@ -1,0 +1,79 @@
+{
+  "baseUrl": "http://localhost:8080",
+  "userPool": {
+    "startMemberId": 1,
+    "count": 100000,
+    "emailPattern": "loadtest-user-%06d@test.com",
+    "nicknamePattern": "loadtest-user-%06d",
+    "password": "password1234!"
+  },
+  "concert": {
+    "scheduleId": 1,
+    "totalSeats": 50000
+  },
+  "auth": {
+    "users": {
+      "startMemberId": 1,
+      "count": 1000
+    }
+  },
+  "queue": {
+    "enterUsers": {
+      "startMemberId": 1,
+      "count": 20000
+    },
+    "rankPollingUsers": {
+      "startMemberId": 1001,
+      "count": 19000
+    }
+  },
+  "reservation": {
+    "activeUsers": {
+      "startMemberId": 20001,
+      "count": 10000
+    },
+    "uniqueSeats": {
+      "startSeatId": 1,
+      "count": 50000
+    },
+    "contentionUsers": {
+      "startMemberId": 30001,
+      "count": 2000
+    },
+    "contentionSeats": {
+      "startSeatId": 10001,
+      "count": 1
+    },
+    "burstUsers": {
+      "startMemberId": 40001,
+      "count": 2000
+    },
+    "burstSeats": {
+      "startSeatId": 10001,
+      "count": 1
+    }
+  },
+  "profiles": {
+    "smoke": {
+      "burst-reservation-contention": {
+        "vus": 20,
+        "iterations": 1,
+        "maxDuration": "1m"
+      }
+    },
+    "burst300": {
+      "burst-reservation-contention": {
+        "vus": 300,
+        "iterations": 1,
+        "maxDuration": "2m"
+      }
+    },
+    "burst500": {
+      "burst-reservation-contention": {
+        "vus": 500,
+        "iterations": 1,
+        "maxDuration": "3m"
+      }
+    }
+  }
+}

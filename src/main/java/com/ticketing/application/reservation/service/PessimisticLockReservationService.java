@@ -27,7 +27,7 @@ public class PessimisticLockReservationService {
 
     @Transactional
     public Reservation reserve(Long seatId, Long memberId, Long scheduleId) {
-        Seat seat = seatMapper.findByIdWithPessimisticLock(seatId)
+        Seat seat = seatMapper.findByIdForUpdate(seatId)
                 .orElseThrow(() -> new SeatNotFoundException(NOT_EXIST_SEAT));
         validateSeatSchedule(seat, scheduleId);
         seat.reserve(memberId);
