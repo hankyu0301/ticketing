@@ -11,6 +11,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -23,6 +24,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -67,9 +69,16 @@ class AsyncPaymentProcessorTest {
 
         given(paymentMapper.findById(paymentId)).willReturn(Optional.of(payment));
         given(reservationMapper.findByIdForUpdate(reservationId)).willReturn(reservation);
+        given(paymentMapper.findByIdForUpdate(paymentId)).willReturn(Optional.of(payment));
         given(seatMapper.findByIdForUpdate(seatId)).willReturn(Optional.of(seat));
 
         Payment result = asyncPaymentProcessor.complete(paymentId);
+
+        InOrder inOrder = inOrder(paymentMapper, reservationMapper, seatMapper);
+        inOrder.verify(paymentMapper).findById(paymentId);
+        inOrder.verify(reservationMapper).findByIdForUpdate(reservationId);
+        inOrder.verify(paymentMapper).findByIdForUpdate(paymentId);
+        inOrder.verify(seatMapper).findByIdForUpdate(seatId);
 
         ArgumentCaptor<Payment> paymentCaptor = ArgumentCaptor.forClass(Payment.class);
         ArgumentCaptor<Reservation> reservationCaptor = ArgumentCaptor.forClass(Reservation.class);

@@ -24,6 +24,11 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -130,6 +135,50 @@ class PaymentServiceIntegrationTest extends IntegrationTestSupport {
 
         assertThat(reloaded.getStatus()).isEqualTo(Payment.PaymentStatus.COMPLETED);
         assertThat(reloaded.getPaidAt()).isEqualTo(completed.getPaidAt());
+    }
+
+    @Test
+    @DisplayName("중복 결제 메시지가 동시에 와도 최종 결제 상태는 완료로 유지된다.")
+    void requestAsyncConcurrentDuplicateMessageKeepsCompletedPayment() throws InterruptedException {
+        Long reservationId = createReservation(memberId);
+        PaymentResponse response = paymentService.requestAsync(memberId, reservationId);
+        PaymentRequestedMessage message = new PaymentRequestedMessage(response.getPaymentId(), reservationId, memberId);
+
+        int threadCount = 8;
+        ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch readyLatch = new CountDownLatch(threadCount);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(threadCount);
+        AtomicInteger failCount = new AtomicInteger();
+
+        for (int i = 0; i < threadCount; i++) {
+            executorService.submit(() -> {
+                readyLatch.countDown();
+                try {
+                    startLatch.await();
+                    paymentMessageListener.handlePaymentRequested(message);
+                } catch (Exception e) {
+                    failCount.incrementAndGet();
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        readyLatch.await(5, TimeUnit.SECONDS);
+        startLatch.countDown();
+        boolean completed = doneLatch.await(10, TimeUnit.SECONDS);
+        executorService.shutdownNow();
+
+        Payment payment = paymentMapper.findById(response.getPaymentId()).orElseThrow();
+        Reservation reservation = reservationMapper.findById(reservationId);
+        Seat seat = seatMapper.findById(seatId).orElseThrow();
+
+        assertThat(completed).isTrue();
+        assertThat(failCount.get()).isZero();
+        assertThat(payment.getStatus()).isEqualTo(Payment.PaymentStatus.COMPLETED);
+        assertThat(reservation.getStatus()).isEqualTo(Reservation.ReservationStatus.CONFIRMED);
+        assertThat(seat.getStatus()).isEqualTo(Seat.SeatStatus.SOLD_OUT);
     }
 
     @Test
