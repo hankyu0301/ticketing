@@ -13,6 +13,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -32,6 +33,8 @@ class ReservationConcurrencyTest extends IntegrationTestSupport {
     private ReservationFacade reservationFacade;
     @Autowired
     private SeatMapper seatMapper;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
     @Autowired
     private TicketingTestDataSetup testDataSetup;
     @Autowired
@@ -101,6 +104,15 @@ class ReservationConcurrencyTest extends IntegrationTestSupport {
         assertThat(updatedSeat.getStatus())
                 .as("좌석은 예매 완료(혹은 진행중) 상태여야 합니다.")
                 .isNotEqualTo(Seat.SeatStatus.AVAILABLE);
+
+        Long reservationCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM reservations WHERE seat_id = ?",
+                Long.class,
+                seatId
+        );
+        assertThat(reservationCount)
+                .as("동시에 요청해도 같은 좌석의 예약 row는 1건만 생성되어야 합니다.")
+                .isEqualTo(1L);
     }
 
     private ReservationCreateRequest createReservationRequest() {
