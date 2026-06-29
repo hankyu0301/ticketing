@@ -27,6 +27,7 @@
         SELECT reservation_id, member_id, seat_id, schedule_id, status, reserved_at, expired_at, created_at, updated_at
         FROM reservations
         WHERE member_id = #{memberId}
+        ORDER BY reserved_at DESC, reservation_id DESC
     </select>
 
     <select id="findExpiredPendingReservationIds" resultType="long">
