@@ -25,7 +25,7 @@
         ORDER BY seat_no ASC
     </select>
 
-    <select id="findByIdForUpdate" resultType="Seat" timeout="5000">
+    <select id="findByIdForUpdate" resultType="Seat" timeout="5">
         SELECT seat_id, schedule_id, seat_no, grade, price, member_Id, status, updated_at, created_at
         FROM seats
         WHERE seat_id = #{seatId}

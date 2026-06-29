@@ -16,7 +16,7 @@
         WHERE payment_id = #{paymentId}
     </select>
 
-    <select id="findByIdForUpdate" resultType="com.ticketing.domain.payment.model.Payment" timeout="5000">
+    <select id="findByIdForUpdate" resultType="com.ticketing.domain.payment.model.Payment" timeout="5">
         SELECT payment_id, reservation_id, member_id, amount, status, paid_at, created_at, updated_at
         FROM payments
         WHERE payment_id = #{paymentId}
