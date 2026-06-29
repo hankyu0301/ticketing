@@ -3,19 +3,15 @@ package com.ticketing.application.queue.service;
 import com.ticketing.api.queue.dto.QueueResponse;
 import com.ticketing.application.queue.service.QueueService;
 import com.ticketing.support.DatabaseCleaner;
+import com.ticketing.support.IntegrationTestSupport;
 import com.ticketing.support.TicketingTestDataSetup;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
+import org.springframework.test.context.TestPropertySource;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -23,18 +19,13 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest(properties = "queue.max-active-member=10")
-@Testcontainers
-class QueueConcurrencyTest {
-
-    @Container
-    @ServiceConnection
-    static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:alpine"))
-            .withExposedPorts(6379);
+@TestPropertySource(properties = "queue.max-active-member=10")
+class QueueConcurrencyTest extends IntegrationTestSupport {
 
     @Autowired
     private QueueService queueService;
@@ -53,7 +44,7 @@ class QueueConcurrencyTest {
 
     @BeforeEach
     void setUp() {
-        redisTemplate.getConnectionFactory().getConnection().serverCommands().flushAll();
+        databaseCleaner.execute();
         TicketingTestDataSetup.TestData testData = testDataSetup.setupConcertAndSeat();
         this.scheduleId = testData.scheduleId();
     }
@@ -73,24 +64,29 @@ class QueueConcurrencyTest {
         AtomicInteger successCount = new AtomicInteger();
         AtomicInteger failCount = new AtomicInteger();
 
-        for (int i = 0; i < THREAD_COUNT; i++) {
-            long memberId = i + 1;
-            executorService.submit(() -> {
-                try {
-                    QueueResponse response = queueService.enterQueue(scheduleId, memberId);
-                    if (!response.isEntered()) {
-                        ranks.add(response.getRank());
+        try {
+            for (int i = 0; i < THREAD_COUNT; i++) {
+                long memberId = i + 1;
+                executorService.submit(() -> {
+                    try {
+                        QueueResponse response = queueService.enterQueue(scheduleId, memberId);
+                        if (!response.isEntered()) {
+                            ranks.add(response.getRank());
+                        }
+                        successCount.incrementAndGet();
+                    } catch (Exception e) {
+                        failCount.incrementAndGet();
+                    } finally {
+                        latch.countDown();
                     }
-                    successCount.incrementAndGet();
-                } catch (Exception e) {
-                    failCount.incrementAndGet();
-                } finally {
-                    latch.countDown();
-                }
-            });
-        }
+                });
+            }
 
-        latch.await();
+            boolean completed = latch.await(10, TimeUnit.SECONDS);
+            assertThat(completed).isTrue();
+        } finally {
+            executorService.shutdownNow();
+        }
 
         assertThat(successCount.get()).isEqualTo(100);
         assertThat(failCount.get()).isEqualTo(0);
