@@ -1,30 +1,18 @@
 package com.ticketing.infrastructure.persistence.queue;
 
+import com.ticketing.support.IntegrationTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest
-@Testcontainers
-class QueueRedisTest {
-
-    @Container
-    @ServiceConnection
-    static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:alpine"))
-            .withExposedPorts(6379);
+class QueueRedisTest extends IntegrationTestSupport {
 
     @Autowired
     private QueueRedisRepository queueRedisRepository;
@@ -37,7 +25,6 @@ class QueueRedisTest {
 
     @BeforeEach
     void setUp() {
-        redisTemplate.getConnectionFactory().getConnection().serverCommands().flushAll();
         ReflectionTestUtils.setField(queueRedisRepository, "maxActiveMember", TEST_MAX_ACTIVE);
         saveOpenedScheduleMeta();
     }

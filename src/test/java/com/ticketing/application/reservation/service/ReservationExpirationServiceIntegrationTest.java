@@ -12,13 +12,16 @@ import com.ticketing.infrastructure.messaging.rabbitmq.PaymentRequestedMessage;
 import com.ticketing.infrastructure.persistence.payment.PaymentMapper;
 import com.ticketing.infrastructure.persistence.reservation.ReservationMapper;
 import com.ticketing.infrastructure.persistence.seat.mapper.SeatMapper;
+import com.ticketing.support.DatabaseCleaner;
+import com.ticketing.support.IntegrationTestSupport;
 import com.ticketing.support.TicketingTestDataSetup;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -27,11 +30,8 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest(properties = {
-        "spring.task.scheduling.enabled=false",
-        "spring.session.store-type=none"
-})
-class ReservationExpirationServiceIntegrationTest {
+@TestPropertySource(properties = "spring.session.store-type=none")
+class ReservationExpirationServiceIntegrationTest extends IntegrationTestSupport {
 
     @Autowired
     private PaymentService paymentService;
@@ -57,6 +57,9 @@ class ReservationExpirationServiceIntegrationTest {
     @Autowired
     private TicketingTestDataSetup testDataSetup;
 
+    @Autowired
+    private DatabaseCleaner databaseCleaner;
+
     @MockitoBean
     private RabbitTemplate rabbitTemplate;
 
@@ -66,11 +69,17 @@ class ReservationExpirationServiceIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        databaseCleaner.execute();
         TicketingTestDataSetup.TestData data = testDataSetup.setupConcertAndSeat();
         this.scheduleId = data.scheduleId();
         this.seatId = data.seatId();
         List<Long> memberIds = testDataSetup.setupMembers(1);
         this.memberId = memberIds.get(0);
+    }
+
+    @AfterEach
+    void tearDown() {
+        databaseCleaner.execute();
     }
 
     @Test

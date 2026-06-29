@@ -70,6 +70,7 @@ class PaymentServiceIntegrationTest extends IntegrationTestSupport {
 
     @BeforeEach
     void setUp() {
+        databaseCleaner.execute();
         TicketingTestDataSetup.TestData data = testDataSetup.setupConcertAndSeat();
         this.scheduleId = data.scheduleId();
         this.seatId = data.seatId();
