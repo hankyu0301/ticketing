@@ -12,6 +12,8 @@ public interface PaymentMapper {
 
     Optional<Payment> findById(Long paymentId);
 
+    Optional<Payment> findByIdForUpdate(Long paymentId);
+
     Optional<Payment> findByReservationId(Long reservationId);
 
     void update(Payment payment);

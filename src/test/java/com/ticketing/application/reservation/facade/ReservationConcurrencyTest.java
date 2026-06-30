@@ -1,6 +1,5 @@
 package com.ticketing.application.reservation.facade;
 
-import com.ticketing.application.reservation.facade.ReservationFacade;
 import com.ticketing.api.reservation.dto.ReservationCreateRequest;
 import com.ticketing.infrastructure.persistence.seat.mapper.SeatMapper;
 import com.ticketing.domain.seat.model.Seat;
@@ -12,26 +11,26 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@Testcontainers
-@SpringBootTest
 class ReservationConcurrencyTest extends IntegrationTestSupport {
 
     @Autowired
     private ReservationFacade reservationFacade;
     @Autowired
     private SeatMapper seatMapper;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
     @Autowired
     private TicketingTestDataSetup testDataSetup;
     @Autowired
@@ -48,6 +47,7 @@ class ReservationConcurrencyTest extends IntegrationTestSupport {
 
     @BeforeEach
     void setUp() {
+        databaseCleaner.execute();
         TicketingTestDataSetup.TestData data = testDataSetup.setupConcertAndSeat();
 
         this.scheduleId = data.scheduleId();
@@ -68,23 +68,29 @@ class ReservationConcurrencyTest extends IntegrationTestSupport {
         AtomicInteger failCount = new AtomicInteger();
 
         // when
-        for (int i = 0; i < threadCount; i++) {
-            final int index = i;
-            executorService.submit(() -> {
-                try {
-                    Long validMemberId = memberIds.get(index);
-                    ReservationCreateRequest request = createReservationRequest();
-                    reservationFacade.reserve(validMemberId, request);
-                    successCount.incrementAndGet();
-                } catch (Exception e) {
-                    failCount.incrementAndGet();
-                    System.out.println("Fail cause: " + e.getClass().getSimpleName() + " - " + e.getMessage());
-                } finally {
-                    latch.countDown();
-                }
-            });
+        try {
+            for (int i = 0; i < threadCount; i++) {
+                final int index = i;
+                executorService.submit(() -> {
+                    try {
+                        Long validMemberId = memberIds.get(index);
+                        ReservationCreateRequest request = createReservationRequest();
+                        reservationFacade.reserve(validMemberId, request);
+                        successCount.incrementAndGet();
+                    } catch (Exception e) {
+                        failCount.incrementAndGet();
+                        System.out.println("Fail cause: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+                    } finally {
+                        latch.countDown();
+                    }
+                });
+            }
+
+            boolean completed = latch.await(10, TimeUnit.SECONDS);
+            assertThat(completed).isTrue();
+        } finally {
+            executorService.shutdownNow();
         }
-        latch.await();
 
         // then
         assertThat(successCount.get())
@@ -101,6 +107,15 @@ class ReservationConcurrencyTest extends IntegrationTestSupport {
         assertThat(updatedSeat.getStatus())
                 .as("좌석은 예매 완료(혹은 진행중) 상태여야 합니다.")
                 .isNotEqualTo(Seat.SeatStatus.AVAILABLE);
+
+        Long reservationCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM reservations WHERE seat_id = ?",
+                Long.class,
+                seatId
+        );
+        assertThat(reservationCount)
+                .as("동시에 요청해도 같은 좌석의 예약 row는 1건만 생성되어야 합니다.")
+                .isEqualTo(1L);
     }
 
     private ReservationCreateRequest createReservationRequest() {

@@ -16,7 +16,7 @@
         WHERE reservation_id = #{reservationId}
     </select>
 
-    <select id="findByIdForUpdate" resultType="com.ticketing.domain.reservation.model.Reservation" timeout="5000">
+    <select id="findByIdForUpdate" resultType="com.ticketing.domain.reservation.model.Reservation" timeout="5">
         SELECT reservation_id, member_id, seat_id, schedule_id, status, reserved_at, expired_at, created_at, updated_at
         FROM reservations
         WHERE reservation_id = #{reservationId}
@@ -27,6 +27,7 @@
         SELECT reservation_id, member_id, seat_id, schedule_id, status, reserved_at, expired_at, created_at, updated_at
         FROM reservations
         WHERE member_id = #{memberId}
+        ORDER BY reserved_at DESC, reservation_id DESC
     </select>
 
     <select id="findExpiredPendingReservationIds" resultType="long">

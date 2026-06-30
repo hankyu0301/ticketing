@@ -30,13 +30,14 @@ public class AsyncPaymentProcessor {
 
     @Transactional
     public Payment complete(Long paymentId) {
-        Payment payment = findPayment(paymentId);
+        Payment paymentSnapshot = findPayment(paymentId);
+        Reservation reservation = reservationMapper.findByIdForUpdate(paymentSnapshot.getReservationId());
+        Payment payment = findPaymentForUpdate(paymentId);
 
         if (payment.getStatus() != Payment.PaymentStatus.PENDING) {
             return payment;
         }
 
-        Reservation reservation = reservationMapper.findByIdForUpdate(payment.getReservationId());
         if (reservation == null) {
             return failPayment(payment);
         }
@@ -53,6 +54,11 @@ public class AsyncPaymentProcessor {
         completePayment(payment, reservation, seat);
         log.info("Payment completed. paymentId={}, reservationId={}", paymentId, reservation.getReservationId());
         return payment;
+    }
+
+    private Payment findPaymentForUpdate(Long paymentId) {
+        return paymentMapper.findByIdForUpdate(paymentId)
+                .orElseThrow(() -> new PaymentNotFoundException(NOT_EXIST_PAYMENT));
     }
 
     private Payment findPayment(Long paymentId) {

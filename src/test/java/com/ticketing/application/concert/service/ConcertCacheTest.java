@@ -8,19 +8,14 @@ import com.ticketing.infrastructure.persistence.concert.ConcertScheduleMapper;
 import com.ticketing.domain.concert.model.Concert;
 import com.ticketing.domain.concert.model.ConcertSchedule;
 import com.ticketing.application.concert.service.ConcertService;
+import com.ticketing.support.IntegrationTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.cache.CacheManager;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -31,14 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
 
-@SpringBootTest
-@Testcontainers
-class ConcertCacheTest {
-
-    @Container
-    @ServiceConnection
-    static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:alpine"))
-            .withExposedPorts(6379);
+class ConcertCacheTest extends IntegrationTestSupport {
 
     @Autowired
     private ConcertService concertService;

@@ -1,4 +1,4 @@
-# ticketing 프로젝트 개요
+# Ticketing - 대기열 기반 콘서트 예매 시스템
 
 `ticketing`은 콘서트 예매에서 발생하는 **오픈 시간 대기열 진입, 좌석 선점, 예약 확정, 동기/비동기 결제** 흐름을 다루는 프로젝트입니다.
 
@@ -16,6 +16,14 @@
 - 좌석 예약의 정합성을 보장하고 중복 예약을 방지합니다.
 - 동기/비동기 결제 흐름을 분리해 처리 안정성을 확보합니다.
 - k6 기반 부하테스트로 병목과 tail latency를 검증합니다.
+
+## 포트폴리오 핵심 포인트
+
+- **대기열 제어**: Redis 기반 waiting/active 상태로 예매 진입량을 제한합니다.
+- **좌석 정합성**: Redisson 분산락과 비관적 락 경로를 비교할 수 있도록 구성했습니다.
+- **빠른 실패 전략**: 예약 불가 좌석 캐시와 lock wait timeout으로 경합 실패 응답을 분리합니다.
+- **비동기 결제**: RabbitMQ 메시징으로 결제 요청 접수와 후속 처리를 분리합니다.
+- **성능 검증**: k6, slow query, Actuator 지표로 병목 후보를 나누어 관측했습니다.
 
 ## Git Flow
 
@@ -111,6 +119,7 @@ flowchart LR
 
 - 현재 프로젝트는 `ticketing.lock.strategy` 설정으로 락 전략을 전환할 수 있습니다.
 - 분산락 경로와 비관락 경로가 공존하며, 환경과 검증 목적에 따라 전략을 바꿔 비교할 수 있습니다.
+- Redis 예약 불가 캐시는 이미 임시 선점되었거나 판매 완료된 좌석에 대해 lock 진입 전 빠른 실패를 유도합니다.
 
 ## 로컬 실행 방법
 
@@ -125,6 +134,7 @@ docker compose up --build
 
 - 최초 기동 시 [schema.sql](./src/main/resources/schema.sql) 이 MariaDB init script로 자동 적용됩니다.
 - 스키마를 새로 만들려면 아래 명령으로 volume까지 삭제해야 합니다.
+- `root/root`, `guest/guest` 계정은 로컬 Docker Compose 실행용 기본값입니다.
 
 ```bash
 docker compose down -v
@@ -140,24 +150,56 @@ docker compose down -v
 
 - queue burst, rank polling, reservation unique/contention, e2e 시나리오를 분리해 측정했습니다.
 - 상세 실행 방법은 [loadtest/README.md](./loadtest/README.md) 에 정리되어 있습니다.
-- baseline 결과 요약은 [docs/performance/queue-reservation-k6-baseline.md](./docs/performance/queue-reservation-k6-baseline.md) 에 정리되어 있습니다.
 - raw 결과 파일은 Git 추적 대상이 아니며, 저장소에는 Markdown 요약만 남깁니다.
+
+대표 성능 문서는 다음 순서로 읽는 것을 권장합니다.
+
+| 문서 | 목적 |
+| --- | --- |
+| [예약 시스템 부하테스트 및 성능 개선 요약](./docs/performance/reservation-loadtest-performance-report.md) | 경합 없는 예약 생성 기준선과 Tomcat/Hikari/Redis 병목 관측 |
+| [인기 좌석군 경합 부하테스트 결과](./docs/performance/stress-reservation-popular-contention-result.md) | 인기 좌석군 경합에서 중복 예약 방지 검증 |
+| [예약 좌석 경합 병목 탐색 결과](./docs/performance/reservation-contention-bottleneck-analysis.md) | 단일 좌석 burst 지연 원인 분석 |
+| [예약 빠른 실패 부하테스트 결과](./docs/performance/reservation-fast-fail-loadtest-result.md) | unavailable cache와 lock wait time 튜닝 결과 |
+| [Active 사용자 수별 Admission 기준 도출 결과](./docs/performance/active-admission-loadtest-result.md) | active 사용자 수 변화에 따른 안정 구간 확인 |
+
+성능 수치는 로컬 Windows PC와 Docker 기반 loadtest 환경에서 얻은 결과이므로, 운영 환경의 절대 처리량으로 단정하지 않고 조건 변경에 따른 상대 비교 근거로 해석합니다.
+
+## 기본 검증
+
+일반 기능 검증은 다음 명령을 기준으로 합니다.
+
+```bash
+./gradlew test
+```
+
+부하테스트 smoke는 loadtest 인프라를 준비한 뒤 실행합니다.
+
+```bash
+./gradlew loadtestAppBuild
+./gradlew loadtestBaseRebuild
+./gradlew loadtestRunReset
+./gradlew loadtestRunK6 -Pscenario=smoke-seeded-login -Ptargets=loadtest/k6/data/targets.smoke.json
+```
 
 ## 트러블슈팅 / 개선 포인트
 
 - Payment 비동기 안정성
-  - 현재는 RabbitMQ 기반 비동기 결제를 사용하며, outbox 패턴을 통한 안정성 보강 여지가 있습니다.
+  - 현재는 RabbitMQ 기반 비동기 결제를 사용하며, outbox, retry, DLQ를 통한 안정성 보강 여지가 있습니다.
 - Queue p95 tail latency 해석
   - burst 시나리오는 endpoint 단일 처리시간이 아니라 로그인/CSRF/queue 진입이 섞인 사용자 경험 지표로 읽어야 합니다.
 - 스키마 불일치 이슈
-  - 로컬 DB가 오래된 상태면 mapper가 기대하는 컬럼과 실제 테이블 구조가 어긋날 수 있습니다.
+  - 로컬 DB가 오래된 상태면 mapper가 기대하는 컬럼과 실제 테이블 구조가 어긋날 수 있습니다. 현재는 `schema.sql` 기반 초기화 방식이며, 운영형 migration 도구는 적용하지 않았습니다.
 - Contention 결과 해석
   - 좌석 경쟁 시 `400`은 시스템 오류가 아니라 “정상 경쟁 실패”일 수 있으므로 비즈니스 실패와 예외 실패를 분리해 봐야 합니다.
 
 ## 상세 문서
 
 - Loadtest 실행 가이드: [loadtest/README.md](./loadtest/README.md)
-- Queue/Reservation baseline 결과: [docs/performance/queue-reservation-k6-baseline.md](./docs/performance/queue-reservation-k6-baseline.md)
+- 예약 기준선/성능 개선: [docs/performance/reservation-loadtest-performance-report.md](./docs/performance/reservation-loadtest-performance-report.md)
+- 인기 좌석군 경합 검증: [docs/performance/stress-reservation-popular-contention-result.md](./docs/performance/stress-reservation-popular-contention-result.md)
+- 단일 좌석 경합 병목 분석: [docs/performance/reservation-contention-bottleneck-analysis.md](./docs/performance/reservation-contention-bottleneck-analysis.md)
+- 빠른 실패 전략 검증: [docs/performance/reservation-fast-fail-loadtest-result.md](./docs/performance/reservation-fast-fail-loadtest-result.md)
+- Active admission 기준: [docs/performance/active-admission-loadtest-result.md](./docs/performance/active-admission-loadtest-result.md)
 
 ## Commit Convention
 

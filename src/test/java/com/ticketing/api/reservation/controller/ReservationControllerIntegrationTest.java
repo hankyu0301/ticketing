@@ -10,13 +10,13 @@ import com.ticketing.domain.reservation.model.Reservation;
 import com.ticketing.global.security.service.CustomUserDetails;
 import com.ticketing.global.security.service.SessionMember;
 import com.ticketing.infrastructure.persistence.queue.QueueRedisRepository;
+import com.ticketing.support.IntegrationTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -40,10 +40,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
 @AutoConfigureMockMvc
 @TestPropertySource(properties = "spring.session.store-type=none")
-class ReservationControllerIntegrationTest {
+class ReservationControllerIntegrationTest extends IntegrationTestSupport {
 
     @Autowired
     private MockMvc mockMvc;

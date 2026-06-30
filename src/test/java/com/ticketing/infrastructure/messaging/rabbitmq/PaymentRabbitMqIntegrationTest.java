@@ -19,9 +19,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.testcontainers.containers.RabbitMQContainer;
@@ -36,7 +36,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 
-@SpringBootTest(properties = {
+@TestPropertySource(properties = {
         "spring.rabbitmq.dynamic=true",
         "spring.rabbitmq.listener.simple.auto-startup=true",
         "ticketing.payment.rabbitmq.listener-auto-startup=true"
@@ -85,6 +85,7 @@ class PaymentRabbitMqIntegrationTest extends IntegrationTestSupport {
 
     @BeforeEach
     void setUp() {
+        databaseCleaner.execute();
         TicketingTestDataSetup.TestData data = testDataSetup.setupConcertAndSeat();
         this.scheduleId = data.scheduleId();
         this.seatId = data.seatId();

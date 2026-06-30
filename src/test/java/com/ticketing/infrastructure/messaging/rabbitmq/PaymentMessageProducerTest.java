@@ -1,12 +1,13 @@
 package com.ticketing.infrastructure.messaging.rabbitmq;
 
 import com.ticketing.application.payment.service.PaymentRequestedEvent;
+import com.ticketing.support.IntegrationTestSupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -14,12 +15,12 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-@SpringBootTest(properties = {
+@TestPropertySource(properties = {
         "spring.session.store-type=none",
         "spring.rabbitmq.listener.simple.auto-startup=false",
         "ticketing.payment.rabbitmq.listener-auto-startup=false"
 })
-class PaymentMessageProducerTest {
+class PaymentMessageProducerTest extends IntegrationTestSupport {
 
     @Autowired
     private TransactionTemplate transactionTemplate;
