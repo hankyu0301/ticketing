@@ -1,0 +1,2 @@
+SET GLOBAL read_only = ON;
+CHANGE MASTER TO MASTER_USE_GTID=current_pos;

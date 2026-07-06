@@ -1,0 +1,12 @@
+[mariadb]
+server_id=1
+log_basename=ticketing-primary
+log_bin
+binlog_format=ROW
+gtid_strict_mode=ON
+log_slave_updates=ON
+sync_binlog=1
+innodb_flush_log_at_trx_commit=1
+expire_logs_days=7
+character_set_server=utf8mb4
+collation_server=utf8mb4_unicode_ci
