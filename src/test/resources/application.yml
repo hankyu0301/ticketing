@@ -6,6 +6,8 @@ server:
         same-site: lax
 
 spring:
+  profiles:
+    default: standalone
   autoconfigure:
     exclude:
       - org.redisson.spring.starter.RedissonAutoConfigurationV2
@@ -31,7 +33,7 @@ spring:
 
   datasource:
     driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
-    url: jdbc:tc:mariadb:10.6:///ticketing
+    url: jdbc:tc:mariadb:10.11.16:///ticketing
     username: test
     password: test
 

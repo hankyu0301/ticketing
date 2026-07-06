@@ -39,7 +39,8 @@
 - Java 17: 애플리케이션 런타임
 - Spring Boot 3.5: 웹 애플리케이션, 보안, 스케줄링, 메시징
 - MyBatis: SQL 기반 영속성 계층
-- MariaDB 10.6: 예약/결제/회원/좌석 데이터 영속화
+- MariaDB 10.11: 예약/결제/회원/좌석 데이터 영속화
+- MaxScale 24.02: MariaDB Primary 감시, 자동 장애조치, 애플리케이션 연결 중계
 - Redis 7: 대기열, 세션, 스케줄 메타 관리
 - RabbitMQ 3.13: 비동기 결제 메시징
 - Docker Compose: 로컬 실행 환경 구성
@@ -123,28 +124,328 @@ flowchart LR
 
 ## 로컬 실행 방법
 
-### 일반 실행
+### 애플리케이션 프로필
+
+`application.yml`에는 모든 환경이 공유하는 서버, 세션, MyBatis, Queue, Scheduler 설정만 둡니다. DB와 Redis 연결 방식은 반드시 실행 프로필로 선택합니다.
+
+| 프로필 | MariaDB | Redis | 용도 |
+| --- | --- | --- | --- |
+| `dev` | MaxScale 2대 경유 | Sentinel 3대 경유 | Replica와 자동 장애조치가 적용된 개발 환경 |
+| `standalone` | 단일 MariaDB 직접 연결 | 단일 Redis 직접 연결 | HA 적용 이전 구성의 백업·간단한 로컬 실행 |
+| `loadtest` | 부하테스트 MariaDB 직접 연결 | 부하테스트 Redis 직접 연결 | k6 부하테스트 |
+
+프로필을 지정하지 않으면 DB·Redis 연결 설정과 Redisson topology Bean이 구성되지 않아 애플리케이션이 기동하지 않습니다. 의도하지 않은 topology로 조용히 연결되는 것을 방지하기 위한 설정입니다.
+
+기본 Compose는 전체 HA 인프라와 `dev` 프로필 애플리케이션을 함께 실행합니다.
+
+```bash
+docker compose up -d
+```
+
+기존 단일 노드 구성은 별도 standalone Compose로 보존합니다. HA와 standalone은 같은 애플리케이션·RabbitMQ 포트를 사용하므로 동시에 실행하지 않습니다.
+
+```bash
+docker compose down
+docker compose -f docker-compose.standalone.yml up -d
+```
+
+### 기본 HA 실행
 
 - 전체 스택 실행: [docker-compose.yml](./docker-compose.yml)
+- 애플리케이션에는 `SPRING_PROFILES_ACTIVE=dev`가 지정되어 있습니다.
+- MariaDB Primary 1대·Replica 2대·MaxScale 2대, Redis 데이터 노드 3대·Sentinel 3대, RabbitMQ가 함께 실행됩니다.
 - 실행 명령:
 
 ```bash
-docker compose up --build
+docker compose up -d --build
+docker compose ps
+```
+
+기존의 분리된 MariaDB HA·Redis HA Compose를 실행한 적이 있다면 통합 Compose 최초 실행 전에 예전 컨테이너만 한 번 제거해야 합니다. 아래 명령은 named volume을 삭제하지 않습니다.
+
+```bash
+docker rm -f `
+  ticketing-ha-mariadb-primary `
+  ticketing-ha-mariadb-replica-1 `
+  ticketing-ha-mariadb-replica-2 `
+  ticketing-ha-mariadb-bootstrap `
+  ticketing-ha-maxscale-1 `
+  ticketing-ha-maxscale-2 `
+  ticketing-ha-redis-primary `
+  ticketing-ha-redis-replica-1 `
+  ticketing-ha-redis-replica-2 `
+  ticketing-ha-redis-sentinel-1 `
+  ticketing-ha-redis-sentinel-2 `
+  ticketing-ha-redis-sentinel-3
+
+docker compose down --remove-orphans
+docker compose up -d --build
 ```
 
 - 최초 기동 시 [schema.sql](./src/main/resources/schema.sql) 이 MariaDB init script로 자동 적용됩니다.
-- 스키마를 새로 만들려면 아래 명령으로 volume까지 삭제해야 합니다.
-- `root/root`, `guest/guest` 계정은 로컬 Docker Compose 실행용 기본값입니다.
+- 저장소의 기본 비밀번호는 로컬 검증 전용입니다.
+- 종료할 때는 named volume을 유지합니다.
 
 ```bash
-docker compose down -v
+docker compose down
 ```
+
+### MariaDB HA 실행
+
+- HA 구성: [docker-compose.yml](./docker-compose.yml)
+- MariaDB `10.11.16` Primary 1대와 Replica 2대를 별도 볼륨으로 실행합니다.
+- MaxScale `24.02.9` 2대가 Primary 감시, 자동 승격, 기존 Primary 재편입을 수행합니다.
+- Compose 서비스 이름과 런타임 역할을 분리하며, 재기동할 때 현재 복제 방향을 기준으로 Master와 Replica 역할을 복원합니다.
+- 기존 일반 실행용 MariaDB와 포트 및 볼륨을 공유하지 않습니다.
+- 두 MaxScale는 `majority_of_all` 협력 락을 사용하므로 DB 노드 과반수와 통신 가능한 인스턴스만 장애조치를 수행합니다.
+- 데이터 복제는 비동기 방식이므로 장애 직전 Replica에 전달되지 않은 트랜잭션은 유실될 수 있습니다.
+
+```bash
+docker compose up -d
+docker compose ps
+```
+
+| 구성요소 | 호스트 포트 | 역할 |
+| --- | ---: | --- |
+| MariaDB 초기 Primary | `13306` | `server_id=1` |
+| MariaDB 초기 Replica 1 | `13307` | `server_id=2` |
+| MariaDB 초기 Replica 2 | `13308` | `server_id=3` |
+| MaxScale 1 DB Listener | `14006` | 애플리케이션 DB 연결 |
+| MaxScale 2 DB Listener | `14007` | MaxScale 1 장애 시 대체 연결 |
+| MaxScale 1 REST API | `18989` | `maxctrl` 관리 API |
+| MaxScale 2 REST API | `18990` | `maxctrl` 관리 API |
+
+MariaDB와 MaxScale의 호스트 포트는 로컬 검증을 위해 `127.0.0.1`에만 바인딩됩니다. 애플리케이션은 MariaDB에 직접 연결하지 않고 MaxScale만 사용합니다.
+
+Compose의 애플리케이션은 `dev` 프로필로 실행됩니다. Connector/J의 `sequential` 연결이 Compose 내부의 MaxScale 1에 먼저 연결하고, 연결할 수 없으면 MaxScale 2를 시도합니다.
+
+운영 또는 공유 환경에서는 Compose 실행 전에 다음 비밀번호 환경변수를 별도로 지정합니다.
+
+- `MARIADB_HA_ROOT_PASSWORD`
+- `MARIADB_HA_APP_PASSWORD`
+- `MARIADB_HA_REPLICATION_PASSWORD`
+- `MAXSCALE_MONITOR_PASSWORD`
+- `MAXSCALE_SERVICE_PASSWORD`
+
+저장소에 정의된 기본 비밀번호는 로컬 검증 전용입니다.
+
+정상 상태와 문서화용 로그는 다음 명령으로 확인합니다.
+
+```bash
+docker exec ticketing-ha-mariadb-primary mariadb -uroot -proot -e "SELECT @@server_id, @@read_only, @@gtid_current_pos, @@gtid_slave_pos;"
+docker exec ticketing-ha-mariadb-replica-1 mariadb -uroot -proot -e "SHOW REPLICA STATUS\G"
+docker exec ticketing-ha-mariadb-replica-2 mariadb -uroot -proot -e "SHOW REPLICA STATUS\G"
+docker exec ticketing-ha-maxscale-1 maxctrl list servers
+docker exec ticketing-ha-maxscale-1 maxctrl show monitor MariaDB-Monitor
+docker exec ticketing-ha-maxscale-2 maxctrl show monitor MariaDB-Monitor
+docker compose logs --no-color mariadb-primary mariadb-replica-1 mariadb-replica-2 mariadb-role-reconcile maxscale-1 maxscale-2
+```
+
+정상 상태에서는 다음 조건을 만족해야 합니다.
+
+- MaxScale의 서버 목록에 `Master`가 정확히 1대 존재합니다.
+- 나머지 2대는 `Slave, Running` 상태입니다.
+- 두 Replica의 `Slave_IO_Running`, `Slave_SQL_Running`이 모두 `Yes`입니다.
+- Primary와 Replica의 GTID 위치가 최종적으로 수렴합니다.
+- 두 MaxScale 중 하나는 장애조치가 가능한 primary monitor, 다른 하나는 cooperative lock에 의해 대기하는 secondary monitor입니다.
+- `mariadb-role-reconcile`은 상위 복제 원본이 없는 노드를 정확히 1대 찾아 쓰기 가능한 Master로 복원해야 합니다.
+
+Replica가 승격되면 더 이상 replication thread가 없으므로 MariaDB healthcheck는 DB 프로세스의 접속 및 InnoDB 초기화만 검사합니다. MaxScale healthcheck는 `Master, Running`이 정확히 1대이고 `Slave, Running`이 최소 1대인지 검사합니다. 전체 복제 건전성은 MaxScale 상태와 `SHOW REPLICA STATUS`로 함께 확인합니다.
+
+#### 장애조치 검증
+
+장애 테스트 전후로 명령 실행 시각과 출력을 함께 보관합니다.
+
+1. MaxScale 1 중지 후 애플리케이션의 신규 DB 연결이 MaxScale 2를 사용하는지 확인합니다.
+
+```bash
+docker stop ticketing-ha-maxscale-1
+```
+
+2. MaxScale 1을 복구한 뒤 현재 Primary를 중지합니다. 초기 상태에서는 `ticketing-ha-mariadb-primary`입니다.
+
+```bash
+docker start ticketing-ha-maxscale-1
+docker stop ticketing-ha-mariadb-primary
+```
+
+3. Replica 승격과 애플리케이션 신규 요청 복구를 확인합니다.
+
+```bash
+docker exec ticketing-ha-maxscale-1 maxctrl list servers
+docker exec ticketing-ha-maxscale-1 maxctrl show monitor MariaDB-Monitor
+```
+
+4. 기존 Primary를 다시 실행하고 Replica로 재편입되는지 확인합니다.
+
+```bash
+docker start ticketing-ha-mariadb-primary
+docker exec ticketing-ha-maxscale-1 maxctrl list servers
+```
+
+장애 순간 이미 실행 중인 트랜잭션은 실패하고 롤백될 수 있습니다. 해당 요청을 성공으로 간주하거나 무조건 재시도하지 말고, 실패 로그와 신규 요청 복구 시각을 분리해 기록합니다.
+
+문서에는 다음 항목을 남깁니다.
+
+- MaxScale 이미지 버전과 digest
+- 장애 주입, 감지, 승격 완료, 첫 정상 요청 시각
+- 승격 전후 Primary의 `server_id`와 GTID
+- 장애 전후 `SHOW REPLICA STATUS`
+- MaxScale failover, cooperative lock, auto-rejoin 로그
+- Hikari/Connector/J의 연결 실패 및 재연결 로그
+- 중복 예약·결제 여부와 실패 트랜잭션 롤백 결과
+- 측정된 RTO와 확인 가능한 RPO
+
+#### Failover 이후 전체 재기동 검증
+
+Replica가 승격된 뒤 전체 스택을 재기동해도 Compose 서비스 이름에 따라 원래 Primary로 되돌리지 않습니다.
+
+`mariadb-role-reconcile`은 각 노드의 `SHOW REPLICA STATUS`를 조회하여 다음 규칙으로 역할을 복원합니다.
+
+- 상위 복제 원본이 없는 노드가 정확히 1대면 현재 Master로 판단하고 `read_only=OFF`를 적용합니다.
+- 나머지 노드는 모두 현재 Master를 복제하는지 확인하고 `read_only=ON`을 적용합니다.
+- Master 후보가 없거나 2대 이상이면 Split Brain 가능성이 있으므로 실패 종료하고 MaxScale 시작을 차단합니다.
+
+```bash
+docker compose stop mariadb-primary mariadb-replica-1 mariadb-replica-2 maxscale-1 maxscale-2
+docker compose up -d maxscale-1 maxscale-2
+docker compose logs mariadb-role-reconcile
+docker exec ticketing-ha-maxscale-1 maxctrl list servers
+docker exec ticketing-ha-maxscale-2 maxctrl list servers
+```
+
+MaxScale monitor는 `enforce_read_only_slaves=true`, `enforce_writable_master=true`로 런타임 역할을 계속 방어하며 journal은 30일간 유지합니다. journal은 보조 복구 정보일 뿐, 역할 복원의 유일한 근거로 사용하지 않습니다.
+
+#### 롤백
+
+MaxScale와 Sentinel 경유를 중단하려면 HA Compose를 종료하고 standalone Compose를 실행합니다.
+
+```powershell
+docker compose down
+docker compose -f docker-compose.standalone.yml up -d
+```
+
+`down -v`는 MariaDB·MaxScale·Redis·Sentinel의 영속 데이터를 모두 삭제하므로 사용하지 않는 것을 기본으로 합니다.
+
+### Redis Sentinel HA 실행
+
+- HA 구성: [docker-compose.yml](./docker-compose.yml)
+- Redis `7.4.9` 데이터 노드 3대와 Sentinel 3대를 실행합니다.
+- 초기 Primary는 `16379`, Replica는 `16380`, `16381` 포트를 사용합니다.
+- Sentinel은 `ticketing-master`라는 논리 이름으로 현재 Primary를 관리합니다.
+- 애플리케이션은 특정 Redis 노드가 아니라 Sentinel 3대에 접속해 현재 Primary 주소를 조회합니다.
+- 기존 일반 실행용 Redis와 포트 및 볼륨을 공유하지 않습니다.
+
+```bash
+docker compose up -d
+docker compose ps
+```
+
+| 구성요소 | 호스트 포트 | 초기 역할 |
+| --- | ---: | --- |
+| Redis Primary | `16379` | 쓰기 노드 |
+| Redis Replica 1 | `16380` | Primary 복제 |
+| Redis Replica 2 | `16381` | Primary 복제 |
+| Sentinel 1 | `26379` | 감시·장애 판정·승격 투표 |
+| Sentinel 2 | `26380` | 감시·장애 판정·승격 투표 |
+| Sentinel 3 | `26381` | 감시·장애 판정·승격 투표 |
+
+Compose의 애플리케이션은 `dev` 프로필로 실행됩니다. Spring Data Redis의 Lettuce 연결과 Redisson 분산락 연결이 모두 Sentinel을 사용하며, MariaDB 연결도 같은 프로필에서 MaxScale를 사용합니다.
+
+기본 비밀번호는 로컬 검증 전용입니다. 운영 또는 공유 환경에서는 Compose와 애플리케이션에 동일한 환경변수를 지정합니다.
+
+- `REDIS_HA_PASSWORD`: Redis 데이터 노드 인증 비밀번호
+- `REDIS_HA_SENTINEL_PASSWORD`: Sentinel 인증 비밀번호
+- `REDIS_HA_MASTER_NAME`: Sentinel이 관리하는 Primary 논리 이름
+- `REDIS_HA_SENTINEL_1`, `REDIS_HA_SENTINEL_2`, `REDIS_HA_SENTINEL_3`: 애플리케이션이 접속할 Sentinel 주소
+
+정상 상태와 문서화용 로그는 다음 명령으로 확인합니다.
+
+```bash
+docker exec ticketing-ha-redis-sentinel-1 redis-cli -p 26379 -a sentinel-ha-local --no-auth-warning SENTINEL CKQUORUM ticketing-master
+docker exec ticketing-ha-redis-sentinel-1 redis-cli -p 26379 -a sentinel-ha-local --no-auth-warning SENTINEL GET-MASTER-ADDR-BY-NAME ticketing-master
+docker exec ticketing-ha-redis-primary redis-cli -a redis-ha-local --no-auth-warning ROLE
+docker exec ticketing-ha-redis-replica-1 redis-cli -a redis-ha-local --no-auth-warning INFO replication
+docker exec ticketing-ha-redis-replica-2 redis-cli -a redis-ha-local --no-auth-warning INFO replication
+docker compose logs --no-color redis-primary redis-replica-1 redis-replica-2 redis-sentinel-1 redis-sentinel-2 redis-sentinel-3
+```
+
+정상 상태에서는 다음 조건을 만족해야 합니다.
+
+- 세 Sentinel의 `SENTINEL CKQUORUM ticketing-master`가 모두 `OK`를 반환합니다.
+- 세 Sentinel이 알려주는 Primary 주소가 같습니다.
+- Redis 데이터 노드 중 `master` 역할은 정확히 1대입니다.
+- 나머지 2대는 `slave` 역할이고 `master_link_status:up` 상태입니다.
+- Sentinel마다 다른 Sentinel 2대와 Replica 2대를 발견한 상태입니다.
+
+#### 장애조치 검증
+
+장애 테스트 전에는 테스트 키를 기록하고 `WAIT 2 5000`으로 두 Replica가 해당 쓰기를 수신했는지 확인합니다. `WAIT`는 해당 시점의 복제 수신 여부를 확인할 뿐, 이후 장애에서 데이터가 절대 유실되지 않는다는 보장은 아닙니다.
+
+```bash
+docker exec ticketing-ha-redis-primary redis-cli -a redis-ha-local --no-auth-warning SET ticketing:ha:probe before-failover EX 600
+docker exec ticketing-ha-redis-primary redis-cli -a redis-ha-local --no-auth-warning WAIT 2 5000
+```
+
+1. 명령 실행 시각을 기록하고 현재 Primary를 중지합니다.
+
+```bash
+docker stop -t 1 ticketing-ha-redis-primary
+```
+
+2. Sentinel 3대가 같은 새 Primary를 반환하는지 확인합니다.
+
+```bash
+docker exec ticketing-ha-redis-sentinel-1 redis-cli -p 26379 -a sentinel-ha-local --no-auth-warning SENTINEL GET-MASTER-ADDR-BY-NAME ticketing-master
+docker exec ticketing-ha-redis-sentinel-2 redis-cli -p 26379 -a sentinel-ha-local --no-auth-warning SENTINEL GET-MASTER-ADDR-BY-NAME ticketing-master
+docker exec ticketing-ha-redis-sentinel-3 redis-cli -p 26379 -a sentinel-ha-local --no-auth-warning SENTINEL GET-MASTER-ADDR-BY-NAME ticketing-master
+```
+
+3. Lettuce와 Redisson이 Sentinel을 통해 승격된 Primary에 접속하는지 전용 연동 테스트로 확인합니다.
+
+```powershell
+$env:REDIS_HA_IT='true'
+./gradlew test --tests com.ticketing.global.config.RedisSentinelClientIntegrationTest
+```
+
+4. 기존 Primary를 다시 실행하고 새 Primary의 Replica로 재편입되는지 확인합니다.
+
+```bash
+docker start ticketing-ha-redis-primary
+docker exec ticketing-ha-redis-primary redis-cli -a redis-ha-local --no-auth-warning INFO replication
+```
+
+Sentinel은 `down-after-milliseconds=5000`, quorum `2`, `failover-timeout=60000`으로 구성되어 있습니다. 따라서 장애 감지부터 애플리케이션 재연결까지 수 초 이상의 오류 구간이 발생할 수 있습니다. 이미 실행 중인 Redis 명령은 실패할 수 있으므로 무조건 재시도하지 말고, 멱등성이 보장되는 작업만 제한적으로 재시도해야 합니다.
+
+문서에는 다음 항목을 남깁니다.
+
+- Redis 이미지 버전과 digest
+- 장애 주입, `+sdown`, `+odown`, `+switch-master`, 첫 정상 요청 시각
+- 승격 전후 각 노드의 `ROLE`과 replication offset
+- Sentinel의 leader 선출과 Replica 선택 로그
+- Lettuce 재연결 및 Redisson 연결 로그
+- 장애 전 테스트 키와 장애 후 신규 쓰기의 존재 여부
+- 기존 Primary의 Replica 재편입과 offset 수렴 여부
+- 측정된 RTO와 확인 가능한 RPO
+
+Redis 복제는 비동기 방식입니다. 장애 직전 새 Primary로 전달되지 않은 세션, 대기열 상태, 캐시, ShedLock·Redisson 락 키는 유실될 수 있습니다. 특히 분산락만으로 좌석 중복 예약을 최종 방어해서는 안 됩니다. 이 프로젝트는 `seat_id`, `schedule_id`, `status = 'AVAILABLE'` 조건을 만족할 때만 좌석을 `TEMPORARY`로 변경하고, 영향받은 행이 정확히 1개일 때만 예약을 생성하는 DB 조건부 갱신을 최종 방어선으로 사용합니다.
+
+#### 롤백
+
+Sentinel 경유를 중단하려면 HA Compose를 종료하고 standalone Compose를 실행합니다.
+
+```bash
+docker compose down
+docker compose -f docker-compose.standalone.yml up -d
+```
+
+`down -v`는 통합 Compose의 MariaDB·MaxScale·Redis·Sentinel·RabbitMQ 영속 볼륨을 모두 삭제합니다. Sentinel은 현재 Primary 정보를 자신의 설정 파일에 다시 기록하므로, 단순 재시작과 전체 초기화를 구분해야 합니다.
 
 ### Loadtest 실행
 
 - 부하테스트용 인프라: [docker-compose.loadtest.yml](./docker-compose.loadtest.yml)
 - 상세 실행 가이드: [loadtest/README.md](./loadtest/README.md)
-- 일반 compose와 loadtest compose를 동시에 사용하면 `3306`, `6379` 포트 충돌이 날 수 있습니다.
+- 기본 HA Compose와 loadtest Compose를 동시에 사용하면 애플리케이션의 `8080` 포트가 충돌합니다.
 
 ## 성능 테스트
 
@@ -195,6 +496,10 @@ docker compose down -v
 ## 상세 문서
 
 - Loadtest 실행 가이드: [loadtest/README.md](./loadtest/README.md)
+- MariaDB HA 개념편: [왜 MariaDB Replication이 필요했는가](./docs/blog/mariadb-ha/01-why-mariadb-replication-is-needed.md)
+- MariaDB HA 적용편: [MariaDB Replication과 MaxScale HA 적용 및 검증](./docs/blog/mariadb-ha/02-how-we-built-and-verified-mariadb-maxscale-ha.md)
+- Redis HA 개념편: [Redis를 한 대 더 띄우면 고가용성이 될까?](./docs/blog/redis-ha/01-why-redis-sentinel-is-needed.md)
+- Redis HA 적용편: [Redis Sentinel 구성과 실제 Failover·재편입 검증](./docs/blog/redis-ha/02-how-we-built-and-verified-redis-sentinel-ha.md)
 - 예약 기준선/성능 개선: [docs/performance/reservation-loadtest-performance-report.md](./docs/performance/reservation-loadtest-performance-report.md)
 - 인기 좌석군 경합 검증: [docs/performance/stress-reservation-popular-contention-result.md](./docs/performance/stress-reservation-popular-contention-result.md)
 - 단일 좌석 경합 병목 분석: [docs/performance/reservation-contention-bottleneck-analysis.md](./docs/performance/reservation-contention-bottleneck-analysis.md)

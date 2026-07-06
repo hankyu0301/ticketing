@@ -1,3 +1,5 @@
+name: ticketing
+
 services:
   app:
     build:
@@ -5,56 +7,451 @@ services:
       dockerfile: Dockerfile
     container_name: ticketing-app
     depends_on:
-      mariadb:
+      maxscale-1:
         condition: service_healthy
-      redis:
+      maxscale-2:
+        condition: service_healthy
+      redis-sentinel-1:
+        condition: service_healthy
+      redis-sentinel-2:
+        condition: service_healthy
+      redis-sentinel-3:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mariadb://mariadb:3306/ticketing?useUnicode=true&characterEncoding=utf8&allowMultiQueries=true
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: root
-      SPRING_DATA_REDIS_HOST: redis
-      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_PROFILES_ACTIVE: dev
+      MARIADB_HA_JDBC_URL: jdbc:mariadb:sequential://maxscale-1:4006,maxscale-2:4006/ticketing?useUnicode=true&characterEncoding=utf8&allowMultiQueries=true&connectTimeout=2000
+      MARIADB_HA_APP_USER: ticketing
+      MARIADB_HA_APP_PASSWORD: ${MARIADB_HA_APP_PASSWORD:-ticketing}
+      REDIS_HA_PASSWORD: ${REDIS_HA_PASSWORD:-redis-ha-local}
+      REDIS_HA_SENTINEL_PASSWORD: ${REDIS_HA_SENTINEL_PASSWORD:-sentinel-ha-local}
+      REDIS_HA_MASTER_NAME: ${REDIS_HA_MASTER_NAME:-ticketing-master}
+      REDIS_HA_SENTINEL_1: redis-sentinel-1:26379
+      REDIS_HA_SENTINEL_2: redis-sentinel-2:26379
+      REDIS_HA_SENTINEL_3: redis-sentinel-3:26379
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
       SPRING_RABBITMQ_USERNAME: guest
       SPRING_RABBITMQ_PASSWORD: guest
       JAVA_OPTS: -Xms256m -Xmx512m
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8080:8080"
+    restart: unless-stopped
 
-  mariadb:
-    image: mariadb:10.6
-    container_name: ticketing-mariadb
+  mariadb-primary:
+    image: mariadb:10.11.16
+    container_name: ticketing-ha-mariadb-primary
     environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_HA_ROOT_PASSWORD:-root}
       MARIADB_DATABASE: ticketing
-      MARIADB_ROOT_PASSWORD: root
-    command:
-      - --character-set-server=utf8mb4
-      - --collation-server=utf8mb4_unicode_ci
+      MARIADB_USER: ticketing
+      MARIADB_PASSWORD: ${MARIADB_HA_APP_PASSWORD:-ticketing}
+      MARIADB_REPLICATION_USER: replication
+      MARIADB_REPLICATION_PASSWORD: ${MARIADB_HA_REPLICATION_PASSWORD:-replication}
+      MARIADB_HEALTHCHECK_GRANTS: REPLICA MONITOR
     ports:
-      - "3306:3306"
+      - "127.0.0.1:13306:3306"
     volumes:
-      - mariadb-data:/var/lib/mysql
+      - mariadb-primary-data:/var/lib/mysql
+      - ./infra/mariadb-ha/primary.cnf:/etc/mysql/conf.d/ha.cnf:ro
       - ./src/main/resources/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     healthcheck:
-      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost", "-proot"]
-      interval: 10s
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 30s
+      interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 20
+    restart: unless-stopped
 
-  redis:
-    image: redis:7-alpine
-    container_name: ticketing-redis
+  mariadb-replica-1:
+    image: mariadb:10.11.16
+    container_name: ticketing-ha-mariadb-replica-1
+    depends_on:
+      mariadb-primary:
+        condition: service_healthy
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_HA_ROOT_PASSWORD:-root}
+      MARIADB_MASTER_HOST: mariadb-primary
+      MARIADB_REPLICATION_USER: replication
+      MARIADB_REPLICATION_PASSWORD: ${MARIADB_HA_REPLICATION_PASSWORD:-replication}
+      MARIADB_HEALTHCHECK_GRANTS: REPLICA MONITOR
     ports:
-      - "6379:6379"
+      - "127.0.0.1:13307:3306"
+    volumes:
+      - mariadb-replica-1-data:/var/lib/mysql
+      - ./infra/mariadb-ha/replica-1.cnf:/etc/mysql/conf.d/ha.cnf:ro
+      - ./infra/mariadb-ha/replica-init.sql:/docker-entrypoint-initdb.d/01-replica-init.sql:ro
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 30s
+      interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 20
+    restart: unless-stopped
+
+  mariadb-replica-2:
+    image: mariadb:10.11.16
+    container_name: ticketing-ha-mariadb-replica-2
+    depends_on:
+      mariadb-primary:
+        condition: service_healthy
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_HA_ROOT_PASSWORD:-root}
+      MARIADB_MASTER_HOST: mariadb-primary
+      MARIADB_REPLICATION_USER: replication
+      MARIADB_REPLICATION_PASSWORD: ${MARIADB_HA_REPLICATION_PASSWORD:-replication}
+      MARIADB_HEALTHCHECK_GRANTS: REPLICA MONITOR
+    ports:
+      - "127.0.0.1:13308:3306"
+    volumes:
+      - mariadb-replica-2-data:/var/lib/mysql
+      - ./infra/mariadb-ha/replica-2.cnf:/etc/mysql/conf.d/ha.cnf:ro
+      - ./infra/mariadb-ha/replica-init.sql:/docker-entrypoint-initdb.d/01-replica-init.sql:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 30s
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  mariadb-ha-bootstrap:
+    image: mariadb:10.11.16
+    container_name: ticketing-ha-mariadb-bootstrap
+    depends_on:
+      mariadb-primary:
+        condition: service_healthy
+      mariadb-replica-1:
+        condition: service_healthy
+      mariadb-replica-2:
+        condition: service_healthy
+    environment:
+      MARIADB_HA_ROOT_PASSWORD: ${MARIADB_HA_ROOT_PASSWORD:-root}
+      MAXSCALE_MONITOR_USER: ${MAXSCALE_MONITOR_USER:-maxscale_monitor}
+      MAXSCALE_MONITOR_PASSWORD: ${MAXSCALE_MONITOR_PASSWORD:-maxscale_monitor}
+      MAXSCALE_SERVICE_USER: ${MAXSCALE_SERVICE_USER:-maxscale_service}
+      MAXSCALE_SERVICE_PASSWORD: ${MAXSCALE_SERVICE_PASSWORD:-maxscale_service}
+    volumes:
+      - ./infra/mariadb-ha/maxscale/bootstrap-maxscale-users.sh:/usr/local/bin/bootstrap-maxscale-users.sh:ro
+    entrypoint: ["/bin/bash", "/usr/local/bin/bootstrap-maxscale-users.sh"]
+    restart: "no"
+
+  mariadb-role-reconcile:
+    image: mariadb:10.11.16
+    container_name: ticketing-ha-mariadb-role-reconcile
+    depends_on:
+      mariadb-ha-bootstrap:
+        condition: service_completed_successfully
+    environment:
+      MARIADB_HA_ROOT_PASSWORD: ${MARIADB_HA_ROOT_PASSWORD:-root}
+    volumes:
+      - ./infra/mariadb-ha/reconcile-mariadb-roles.sh:/usr/local/bin/reconcile-mariadb-roles.sh:ro
+    entrypoint: ["/bin/bash", "/usr/local/bin/reconcile-mariadb-roles.sh"]
+    restart: "no"
+
+  maxscale-1:
+    image: mariadb/maxscale:24.02.9-ubi-2
+    container_name: ticketing-ha-maxscale-1
+    depends_on:
+      mariadb-role-reconcile:
+        condition: service_completed_successfully
+    environment:
+      MAXSCALE_MONITOR_USER: ${MAXSCALE_MONITOR_USER:-maxscale_monitor}
+      MAXSCALE_MONITOR_PASSWORD: ${MAXSCALE_MONITOR_PASSWORD:-maxscale_monitor}
+      MAXSCALE_SERVICE_USER: ${MAXSCALE_SERVICE_USER:-maxscale_service}
+      MAXSCALE_SERVICE_PASSWORD: ${MAXSCALE_SERVICE_PASSWORD:-maxscale_service}
+      MARIADB_REPLICATION_USER: replication
+      MARIADB_REPLICATION_PASSWORD: ${MARIADB_HA_REPLICATION_PASSWORD:-replication}
+    ports:
+      - "127.0.0.1:14006:4006"
+      - "127.0.0.1:18989:8989"
+    volumes:
+      - ./infra/mariadb-ha/maxscale/maxscale.cnf:/etc/maxscale.cnf:ro
+      - ./infra/mariadb-ha/maxscale/maxscale-healthcheck.sh:/usr/local/bin/maxscale-healthcheck.sh:ro
+      - maxscale-1-data:/var/lib/maxscale
+    healthcheck:
+      test: ["CMD", "/bin/bash", "/usr/local/bin/maxscale-healthcheck.sh"]
+      start_period: 20s
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  maxscale-2:
+    image: mariadb/maxscale:24.02.9-ubi-2
+    container_name: ticketing-ha-maxscale-2
+    depends_on:
+      mariadb-role-reconcile:
+        condition: service_completed_successfully
+    environment:
+      MAXSCALE_MONITOR_USER: ${MAXSCALE_MONITOR_USER:-maxscale_monitor}
+      MAXSCALE_MONITOR_PASSWORD: ${MAXSCALE_MONITOR_PASSWORD:-maxscale_monitor}
+      MAXSCALE_SERVICE_USER: ${MAXSCALE_SERVICE_USER:-maxscale_service}
+      MAXSCALE_SERVICE_PASSWORD: ${MAXSCALE_SERVICE_PASSWORD:-maxscale_service}
+      MARIADB_REPLICATION_USER: replication
+      MARIADB_REPLICATION_PASSWORD: ${MARIADB_HA_REPLICATION_PASSWORD:-replication}
+    ports:
+      - "127.0.0.1:14007:4006"
+      - "127.0.0.1:18990:8989"
+    volumes:
+      - ./infra/mariadb-ha/maxscale/maxscale.cnf:/etc/maxscale.cnf:ro
+      - ./infra/mariadb-ha/maxscale/maxscale-healthcheck.sh:/usr/local/bin/maxscale-healthcheck.sh:ro
+      - maxscale-2-data:/var/lib/maxscale
+    healthcheck:
+      test: ["CMD", "/bin/bash", "/usr/local/bin/maxscale-healthcheck.sh"]
+      start_period: 20s
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  redis-primary:
+    image: redis:7.4.9-alpine
+    container_name: ticketing-ha-redis-primary
+    environment:
+      REDIS_PASSWORD: ${REDIS_HA_PASSWORD:-redis-ha-local}
+    command:
+      - /bin/sh
+      - -c
+      - |
+        exec redis-server \
+          --appendonly yes \
+          --appendfsync everysec \
+          --requirepass "$${REDIS_PASSWORD}" \
+          --masterauth "$${REDIS_PASSWORD}" \
+          --replica-announce-ip host.docker.internal \
+          --replica-announce-port 16379 \
+          --replica-read-only yes \
+          --min-replicas-to-write 1 \
+          --min-replicas-max-lag 10
+    ports:
+      - "16379:6379"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - redis-primary-data:/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "redis-cli -a \"$${REDIS_PASSWORD}\" --no-auth-warning PING | grep -q PONG",
+        ]
+      start_period: 10s
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redis-replica-1:
+    image: redis:7.4.9-alpine
+    container_name: ticketing-ha-redis-replica-1
+    depends_on:
+      redis-primary:
+        condition: service_healthy
+    environment:
+      REDIS_PASSWORD: ${REDIS_HA_PASSWORD:-redis-ha-local}
+    command:
+      - /bin/sh
+      - -c
+      - |
+        exec redis-server \
+          --appendonly yes \
+          --appendfsync everysec \
+          --requirepass "$${REDIS_PASSWORD}" \
+          --masterauth "$${REDIS_PASSWORD}" \
+          --replicaof host.docker.internal 16379 \
+          --replica-announce-ip host.docker.internal \
+          --replica-announce-port 16380 \
+          --replica-read-only yes \
+          --min-replicas-to-write 1 \
+          --min-replicas-max-lag 10
+    ports:
+      - "16380:6379"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - redis-replica-1-data:/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "redis-cli -a \"$${REDIS_PASSWORD}\" --no-auth-warning PING | grep -q PONG",
+        ]
+      start_period: 10s
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redis-replica-2:
+    image: redis:7.4.9-alpine
+    container_name: ticketing-ha-redis-replica-2
+    depends_on:
+      redis-primary:
+        condition: service_healthy
+    environment:
+      REDIS_PASSWORD: ${REDIS_HA_PASSWORD:-redis-ha-local}
+    command:
+      - /bin/sh
+      - -c
+      - |
+        exec redis-server \
+          --appendonly yes \
+          --appendfsync everysec \
+          --requirepass "$${REDIS_PASSWORD}" \
+          --masterauth "$${REDIS_PASSWORD}" \
+          --replicaof host.docker.internal 16379 \
+          --replica-announce-ip host.docker.internal \
+          --replica-announce-port 16381 \
+          --replica-read-only yes \
+          --min-replicas-to-write 1 \
+          --min-replicas-max-lag 10
+    ports:
+      - "16381:6379"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - redis-replica-2-data:/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "redis-cli -a \"$${REDIS_PASSWORD}\" --no-auth-warning PING | grep -q PONG",
+        ]
+      start_period: 10s
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redis-sentinel-1:
+    image: redis:7.4.9-alpine
+    container_name: ticketing-ha-redis-sentinel-1
+    depends_on:
+      redis-primary:
+        condition: service_healthy
+      redis-replica-1:
+        condition: service_healthy
+      redis-replica-2:
+        condition: service_healthy
+    environment:
+      REDIS_MASTER_NAME: ${REDIS_HA_MASTER_NAME:-ticketing-master}
+      REDIS_MASTER_HOST: host.docker.internal
+      REDIS_MASTER_PORT: 16379
+      REDIS_PASSWORD: ${REDIS_HA_PASSWORD:-redis-ha-local}
+      SENTINEL_PASSWORD: ${REDIS_HA_SENTINEL_PASSWORD:-sentinel-ha-local}
+      SENTINEL_ANNOUNCE_HOST: host.docker.internal
+      SENTINEL_ANNOUNCE_PORT: 26379
+      SENTINEL_QUORUM: 2
+      SENTINEL_DOWN_AFTER_MILLISECONDS: 5000
+      SENTINEL_FAILOVER_TIMEOUT: 60000
+      SENTINEL_PARALLEL_SYNCS: 1
+    entrypoint: ["/bin/sh", "/usr/local/bin/sentinel-entrypoint.sh"]
+    ports:
+      - "26379:26379"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./infra/redis-ha/sentinel-entrypoint.sh:/usr/local/bin/sentinel-entrypoint.sh:ro
+      - redis-sentinel-1-data:/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "redis-cli -p 26379 -a \"$${SENTINEL_PASSWORD}\" --no-auth-warning PING | grep -q PONG",
+        ]
+      start_period: 10s
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redis-sentinel-2:
+    image: redis:7.4.9-alpine
+    container_name: ticketing-ha-redis-sentinel-2
+    depends_on:
+      redis-primary:
+        condition: service_healthy
+      redis-replica-1:
+        condition: service_healthy
+      redis-replica-2:
+        condition: service_healthy
+    environment:
+      REDIS_MASTER_NAME: ${REDIS_HA_MASTER_NAME:-ticketing-master}
+      REDIS_MASTER_HOST: host.docker.internal
+      REDIS_MASTER_PORT: 16379
+      REDIS_PASSWORD: ${REDIS_HA_PASSWORD:-redis-ha-local}
+      SENTINEL_PASSWORD: ${REDIS_HA_SENTINEL_PASSWORD:-sentinel-ha-local}
+      SENTINEL_ANNOUNCE_HOST: host.docker.internal
+      SENTINEL_ANNOUNCE_PORT: 26380
+      SENTINEL_QUORUM: 2
+      SENTINEL_DOWN_AFTER_MILLISECONDS: 5000
+      SENTINEL_FAILOVER_TIMEOUT: 60000
+      SENTINEL_PARALLEL_SYNCS: 1
+    entrypoint: ["/bin/sh", "/usr/local/bin/sentinel-entrypoint.sh"]
+    ports:
+      - "26380:26379"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./infra/redis-ha/sentinel-entrypoint.sh:/usr/local/bin/sentinel-entrypoint.sh:ro
+      - redis-sentinel-2-data:/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "redis-cli -p 26379 -a \"$${SENTINEL_PASSWORD}\" --no-auth-warning PING | grep -q PONG",
+        ]
+      start_period: 10s
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redis-sentinel-3:
+    image: redis:7.4.9-alpine
+    container_name: ticketing-ha-redis-sentinel-3
+    depends_on:
+      redis-primary:
+        condition: service_healthy
+      redis-replica-1:
+        condition: service_healthy
+      redis-replica-2:
+        condition: service_healthy
+    environment:
+      REDIS_MASTER_NAME: ${REDIS_HA_MASTER_NAME:-ticketing-master}
+      REDIS_MASTER_HOST: host.docker.internal
+      REDIS_MASTER_PORT: 16379
+      REDIS_PASSWORD: ${REDIS_HA_PASSWORD:-redis-ha-local}
+      SENTINEL_PASSWORD: ${REDIS_HA_SENTINEL_PASSWORD:-sentinel-ha-local}
+      SENTINEL_ANNOUNCE_HOST: host.docker.internal
+      SENTINEL_ANNOUNCE_PORT: 26381
+      SENTINEL_QUORUM: 2
+      SENTINEL_DOWN_AFTER_MILLISECONDS: 5000
+      SENTINEL_FAILOVER_TIMEOUT: 60000
+      SENTINEL_PARALLEL_SYNCS: 1
+    entrypoint: ["/bin/sh", "/usr/local/bin/sentinel-entrypoint.sh"]
+    ports:
+      - "26381:26379"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./infra/redis-ha/sentinel-entrypoint.sh:/usr/local/bin/sentinel-entrypoint.sh:ro
+      - redis-sentinel-3-data:/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "redis-cli -p 26379 -a \"$${SENTINEL_PASSWORD}\" --no-auth-warning PING | grep -q PONG",
+        ]
+      start_period: 10s
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
 
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
@@ -72,7 +469,30 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
 volumes:
-  mariadb-data:
+  mariadb-primary-data:
+    name: ticketing-mariadb-ha_mariadb-primary-data
+  mariadb-replica-1-data:
+    name: ticketing-mariadb-ha_mariadb-replica-1-data
+  mariadb-replica-2-data:
+    name: ticketing-mariadb-ha_mariadb-replica-2-data
+  maxscale-1-data:
+    name: ticketing-mariadb-ha_maxscale-1-data
+  maxscale-2-data:
+    name: ticketing-mariadb-ha_maxscale-2-data
+  redis-primary-data:
+    name: ticketing-redis-ha_redis-primary-data
+  redis-replica-1-data:
+    name: ticketing-redis-ha_redis-replica-1-data
+  redis-replica-2-data:
+    name: ticketing-redis-ha_redis-replica-2-data
+  redis-sentinel-1-data:
+    name: ticketing-redis-ha_redis-sentinel-1-data
+  redis-sentinel-2-data:
+    name: ticketing-redis-ha_redis-sentinel-2-data
+  redis-sentinel-3-data:
+    name: ticketing-redis-ha_redis-sentinel-3-data
   rabbitmq-data:
+    name: ticketing_rabbitmq-data
