@@ -4,6 +4,7 @@ import com.ticketing.api.reservation.dto.ReservationResponse;
 import com.ticketing.application.reservation.policy.ReservationExpirationPolicy;
 import com.ticketing.domain.reservation.exception.ReservationBadRequestException;
 import com.ticketing.domain.reservation.model.Reservation;
+import com.ticketing.domain.seat.exception.SeatAlreadyReservedException;
 import com.ticketing.domain.seat.exception.SeatNotFoundException;
 import com.ticketing.domain.seat.model.Seat;
 import com.ticketing.infrastructure.persistence.reservation.ReservationMapper;
@@ -17,6 +18,7 @@ import java.time.LocalDateTime;
 import java.util.Objects;
 
 import static com.ticketing.domain.reservation.exception.ReservationErrorMessage.SEAT_NOT_BELONG_TO_SCHEDULE;
+import static com.ticketing.domain.seat.exception.SeatErrorMessage.ALREADY_RESERVED;
 import static com.ticketing.domain.seat.exception.SeatErrorMessage.NOT_EXIST_SEAT;
 
 @Service
@@ -33,7 +35,10 @@ public class DefaultReservationService {
                 .orElseThrow(() -> new SeatNotFoundException(NOT_EXIST_SEAT));
         validateSeatSchedule(seat, scheduleId);
         seat.reserve(memberId);
-        seatMapper.update(seat);
+        int updatedRows = seatMapper.reserveIfAvailable(seatId, scheduleId, memberId);
+        if (updatedRows != 1) {
+            throw new SeatAlreadyReservedException(ALREADY_RESERVED);
+        }
 
         LocalDateTime reservedAt = LocalDateTime.now();
         Reservation reservation = Reservation.create(

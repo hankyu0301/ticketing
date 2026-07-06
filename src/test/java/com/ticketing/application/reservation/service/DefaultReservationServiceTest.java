@@ -3,6 +3,7 @@ package com.ticketing.application.reservation.service;
 import com.ticketing.application.reservation.policy.ReservationExpirationPolicy;
 import com.ticketing.domain.reservation.exception.ReservationBadRequestException;
 import com.ticketing.domain.reservation.model.Reservation;
+import com.ticketing.domain.seat.exception.SeatAlreadyReservedException;
 import com.ticketing.domain.seat.model.Seat;
 import com.ticketing.infrastructure.persistence.reservation.ReservationMapper;
 import com.ticketing.infrastructure.persistence.seat.mapper.SeatMapper;
@@ -20,6 +21,7 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static com.ticketing.domain.reservation.exception.ReservationErrorMessage.SEAT_NOT_BELONG_TO_SCHEDULE;
+import static com.ticketing.domain.seat.exception.SeatErrorMessage.ALREADY_RESERVED;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -53,6 +55,7 @@ class DefaultReservationServiceTest {
         given(reservationExpirationPolicy.calculateExpiredAt(any(LocalDateTime.class)))
                 .willAnswer(invocation -> invocation.getArgument(0, LocalDateTime.class).plusMinutes(30));
         given(seatMapper.findById(seatId)).willReturn(Optional.of(seat));
+        given(seatMapper.reserveIfAvailable(seatId, scheduleId, memberId)).willReturn(1);
 
         reservationService.reserve(seatId, memberId, scheduleId);
 
@@ -63,7 +66,26 @@ class DefaultReservationServiceTest {
         assertThat(savedReservation.getReservedAt()).isNotNull();
         assertThat(savedReservation.getExpiredAt()).isEqualTo(savedReservation.getReservedAt().plusMinutes(30));
         verify(reservationExpirationPolicy).calculateExpiredAt(savedReservation.getReservedAt());
-        verify(seatMapper).update(seat);
+        verify(seatMapper).reserveIfAvailable(seatId, scheduleId, memberId);
+    }
+
+    @Test
+    @DisplayName("조회 이후 다른 요청이 좌석을 선점하면 예약을 생성하지 않는다")
+    void reserveFailsWhenConditionalUpdateAffectsNoRows() {
+        Long seatId = 1L;
+        Long memberId = 10L;
+        Long scheduleId = 100L;
+        Seat seat = createSeat(scheduleId, seatId);
+
+        given(seatMapper.findById(seatId)).willReturn(Optional.of(seat));
+        given(seatMapper.reserveIfAvailable(seatId, scheduleId, memberId)).willReturn(0);
+
+        assertThatThrownBy(() -> reservationService.reserve(seatId, memberId, scheduleId))
+                .isInstanceOf(SeatAlreadyReservedException.class)
+                .hasMessage(ALREADY_RESERVED);
+
+        verify(reservationMapper, never()).save(any());
+        verify(reservationExpirationPolicy, never()).calculateExpiredAt(any());
     }
 
     @Test
@@ -80,7 +102,7 @@ class DefaultReservationServiceTest {
                 .isInstanceOf(ReservationBadRequestException.class)
                 .hasMessage(SEAT_NOT_BELONG_TO_SCHEDULE);
 
-        verify(seatMapper, never()).update(any());
+        verify(seatMapper, never()).reserveIfAvailable(any(), any(), any());
         verify(reservationMapper, never()).save(any());
     }
 
