@@ -1,0 +1,10 @@
+spring:
+  datasource:
+    url: ${STANDALONE_MARIADB_JDBC_URL:jdbc:mariadb://localhost:3306/ticketing?useUnicode=true&characterEncoding=utf8&allowMultiQueries=true}
+    username: ${STANDALONE_MARIADB_USER:root}
+    password: ${STANDALONE_MARIADB_PASSWORD:root}
+
+  data:
+    redis:
+      host: ${STANDALONE_REDIS_HOST:localhost}
+      port: ${STANDALONE_REDIS_PORT:6379}

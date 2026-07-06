@@ -1,0 +1,21 @@
+spring:
+  datasource:
+    url: ${MARIADB_HA_JDBC_URL:jdbc:mariadb:sequential://localhost:14006,localhost:14007/ticketing?useUnicode=true&characterEncoding=utf8&allowMultiQueries=true&connectTimeout=2000}
+    username: ${MARIADB_HA_APP_USER:ticketing}
+    password: ${MARIADB_HA_APP_PASSWORD:ticketing}
+    hikari:
+      connection-timeout: 5000
+      validation-timeout: 2000
+
+  data:
+    redis:
+      password: ${REDIS_HA_PASSWORD:redis-ha-local}
+      connect-timeout: 2s
+      timeout: 2s
+      sentinel:
+        master: ${REDIS_HA_MASTER_NAME:ticketing-master}
+        nodes:
+          - ${REDIS_HA_SENTINEL_1:localhost:26379}
+          - ${REDIS_HA_SENTINEL_2:localhost:26380}
+          - ${REDIS_HA_SENTINEL_3:localhost:26381}
+        password: ${REDIS_HA_SENTINEL_PASSWORD:sentinel-ha-local}
