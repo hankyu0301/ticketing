@@ -11,12 +11,12 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.util.UUID;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 @Slf4j
@@ -28,10 +28,10 @@ public class LettuceLockExecutor implements LockExecutor {
     private static final String LOCK_ACQUISITION_TIMEOUT_MESSAGE = "지정한 시간 안에 락을 획득하지 못했습니다.";
     private static final String LOCK_WAIT_INTERRUPTED_MESSAGE = "락 획득 대기 중 인터럽트가 발생했습니다.";
     private static final String LOCK_LOST_MESSAGE = "락 소유권을 상실하여 작업 결과를 신뢰할 수 없습니다.";
+    private static final int HEARTBEAT_POOL_SIZE = Math.max(2, Runtime.getRuntime().availableProcessors());
 
     private final RedisLockRepository redisLockRepository;
-    private final ScheduledExecutorService heartbeatExecutor =
-            Executors.newSingleThreadScheduledExecutor(new LockHeartbeatThreadFactory());
+    private final ScheduledThreadPoolExecutor heartbeatExecutor = createHeartbeatExecutor();
 
     @Value("${ticketing.lock.wait-time-ms:10000}")
     private long waitTimeMs;
@@ -61,23 +61,27 @@ public class LettuceLockExecutor implements LockExecutor {
             }
         }
 
+        Thread executionThread = Thread.currentThread();
         AtomicBoolean lockLost = new AtomicBoolean(false);
-        ScheduledFuture<?> heartbeat = startHeartbeat(
-                lockName,
-                token,
-                leaseTime,
-                Thread.currentThread(),
-                lockLost
-        );
+        ScheduledFuture<?> heartbeat = null;
 
         try {
+            heartbeat = startHeartbeat(
+                    lockName,
+                    token,
+                    leaseTime,
+                    executionThread,
+                    lockLost
+            );
             T result = supplier.get();
             if (lockLost.get()) {
                 throw new IllegalStateException(LOCK_LOST_MESSAGE);
             }
             return result;
         } finally {
-            heartbeat.cancel(true);
+            if (heartbeat != null) {
+                heartbeat.cancel(true);
+            }
             if (lockLost.get()) {
                 Thread.interrupted();
             }
@@ -97,13 +101,41 @@ public class LettuceLockExecutor implements LockExecutor {
         long heartbeatIntervalMs = Math.max(leaseTime.toMillis() / 3, 500L);
 
         return heartbeatExecutor.scheduleAtFixedRate(() -> {
-            boolean renewed = redisLockRepository.renew(lockName, token, leaseTime);
-            if (!renewed && lockLost.compareAndSet(false, true)) {
-                log.error("락 갱신에 실패했습니다. 현재 작업 스레드를 중단합니다. lockName={}", lockName);
-                executionThread.interrupt();
-                throw new IllegalStateException(LOCK_LOST_MESSAGE);
+            if (lockLost.get()) {
+                return;
+            }
+
+            try {
+                boolean renewed = redisLockRepository.renew(lockName, token, leaseTime);
+                if (!renewed) {
+                    markLockLost(lockName, executionThread, lockLost, null);
+                }
+            } catch (Exception e) {
+                markLockLost(lockName, executionThread, lockLost, e);
             }
         }, heartbeatIntervalMs, heartbeatIntervalMs, TimeUnit.MILLISECONDS);
+    }
+
+    private void markLockLost(String lockName, Thread executionThread, AtomicBoolean lockLost, Exception cause) {
+        if (lockLost.compareAndSet(false, true)) {
+            if (cause == null) {
+                log.error("락 갱신에 실패했습니다. 현재 작업 스레드를 중단합니다. lockName={}", lockName);
+            } else {
+                log.error("락 갱신 중 예외가 발생했습니다. 현재 작업 스레드를 중단합니다. lockName={}", lockName, cause);
+            }
+            executionThread.interrupt();
+        }
+    }
+
+    private ScheduledThreadPoolExecutor createHeartbeatExecutor() {
+        ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(
+                HEARTBEAT_POOL_SIZE,
+                new LockHeartbeatThreadFactory()
+        );
+        executor.setRemoveOnCancelPolicy(true);
+        executor.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
+        executor.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
+        return executor;
     }
 
     @PreDestroy
@@ -112,9 +144,11 @@ public class LettuceLockExecutor implements LockExecutor {
     }
 
     private static final class LockHeartbeatThreadFactory implements ThreadFactory {
+        private final AtomicInteger sequence = new AtomicInteger();
+
         @Override
         public Thread newThread(Runnable runnable) {
-            Thread thread = new Thread(runnable, "lettuce-lock-heartbeat");
+            Thread thread = new Thread(runnable, "lettuce-lock-heartbeat-" + sequence.incrementAndGet());
             thread.setDaemon(true);
             return thread;
         }
