@@ -38,7 +38,7 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PathRequest.toStaticResources().atCommonLocations()).permitAll()
-                        .requestMatchers("/", "/api/v1/auth/csrf", "/api/v1/members/signup").permitAll()
+                        .requestMatchers("/", "/api/v1/auth/csrf", "/api/v1/members/signup", "/actuator/health").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/concerts/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/concerts/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/v1/schedules/*/seats").hasRole("ADMIN")
