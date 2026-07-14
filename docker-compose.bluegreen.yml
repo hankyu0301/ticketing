@@ -1,0 +1,116 @@
+name: ticketing-bluegreen
+
+x-app-environment: &app-environment
+  SPRING_PROFILES_ACTIVE: standalone
+  SPRING_DATASOURCE_URL: jdbc:mariadb://mariadb:3306/ticketing?useUnicode=true&characterEncoding=utf8&allowMultiQueries=true
+  SPRING_DATASOURCE_USERNAME: root
+  SPRING_DATASOURCE_PASSWORD: root
+  SPRING_DATA_REDIS_HOST: redis
+  SPRING_DATA_REDIS_PORT: 6379
+  SPRING_RABBITMQ_HOST: rabbitmq
+  SPRING_RABBITMQ_PORT: 5672
+  SPRING_RABBITMQ_USERNAME: guest
+  SPRING_RABBITMQ_PASSWORD: guest
+  JAVA_OPTS: -Xms256m -Xmx512m
+
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: ticketing-nginx
+    command: ["nginx", "-g", "daemon off;"]
+    ports:
+      - "80:80"
+    volumes:
+      - ${APP_DIR:?APP_DIR is required}/nginx:/etc/nginx/conf.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/nginx-health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  app-blue:
+    image: ${APP_BLUE_IMAGE:-ticketing-app-blue:local}
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment: *app-environment
+    ports:
+      - "127.0.0.1:${BLUE_PORT:-18080}:8080"
+    restart: unless-stopped
+
+  app-green:
+    image: ${APP_GREEN_IMAGE:-ticketing-app-green:local}
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment: *app-environment
+    ports:
+      - "127.0.0.1:${GREEN_PORT:-18081}:8080"
+    restart: unless-stopped
+
+  mariadb:
+    image: mariadb:10.6
+    container_name: ticketing-mariadb
+    environment:
+      MARIADB_DATABASE: ticketing
+      MARIADB_ROOT_PASSWORD: root
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - mariadb-data:/var/lib/mysql
+      - ./src/main/resources/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: ticketing-redis
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: ticketing-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  mariadb-data:
+    name: ticketing_mariadb-data
+  rabbitmq-data:
+    name: ticketing_rabbitmq-data
