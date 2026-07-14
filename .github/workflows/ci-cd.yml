@@ -16,10 +16,10 @@ env:
   EC2_USER: ${{ vars.EC2_USER || 'ec2-user' }}
   APP_DIR: ${{ vars.APP_DIR || '/home/ec2-user/ticketing' }}
   COMPOSE_PROJECT_NAME: ${{ vars.COMPOSE_PROJECT_NAME || 'ticketing' }}
-  APP_HEALTH_PATH: ${{ vars.APP_HEALTH_PATH || '/' }}
+  APP_HEALTH_PATH: ${{ vars.APP_HEALTH_PATH || '/actuator/health' }}
   BLUE_PORT: ${{ vars.BLUE_PORT || '18080' }}
   GREEN_PORT: ${{ vars.GREEN_PORT || '18081' }}
-  PUBLIC_HEALTH_URL: ${{ vars.PUBLIC_HEALTH_URL || 'http://localhost/' }}
+  PUBLIC_HEALTH_URL: ${{ vars.PUBLIC_HEALTH_URL || 'http://localhost/actuator/health' }}
   DRAIN_SECONDS: ${{ vars.ACTIVE_APP_DRAIN_SECONDS || '10' }}
 
 jobs:
