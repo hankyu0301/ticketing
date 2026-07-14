@@ -18,7 +18,7 @@ spring:
       namespace: spring:session
 
     cookie:
-      secure: false
+      secure: secure
       http-only: true
       path: /
 
