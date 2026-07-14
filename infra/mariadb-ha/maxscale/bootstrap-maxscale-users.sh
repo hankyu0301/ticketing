@@ -43,14 +43,41 @@ SET SESSION sql_log_bin = 0;
 
 CREATE USER IF NOT EXISTS '${monitor_user}'@'%' IDENTIFIED BY '${monitor_password}';
 ALTER USER '${monitor_user}'@'%' IDENTIFIED BY '${monitor_password}';
-GRANT SUPER, RELOAD, PROCESS, SHOW DATABASES, EVENT, REPLICATION SLAVE, READ_ONLY ADMIN
+
+CREATE USER IF NOT EXISTS '${service_user}'@'%' IDENTIFIED BY '${service_password}';
+ALTER USER '${service_user}'@'%' IDENTIFIED BY '${service_password}';
+SQL
+
+  if MYSQL_PWD="$root_password" mariadb \
+    --protocol=tcp \
+    --host="$database_host" \
+    --user=root \
+    --batch \
+    --skip-column-names \
+    --execute="SHOW GRANTS FOR '${monitor_user}'@'%';" |
+    grep -q "REPLICATION SLAVE"; then
+    MYSQL_PWD="$root_password" mariadb \
+      --protocol=tcp \
+      --host="$database_host" \
+      --user=root <<SQL
+SET SESSION sql_log_bin = 0;
+
+REVOKE REPLICATION SLAVE ON *.* FROM '${monitor_user}'@'%';
+SQL
+  fi
+
+  MYSQL_PWD="$root_password" mariadb \
+    --protocol=tcp \
+    --host="$database_host" \
+    --user=root <<SQL
+SET SESSION sql_log_bin = 0;
+
+GRANT SUPER, RELOAD, PROCESS, SHOW DATABASES, EVENT, REPLICA MONITOR, REPLICATION CLIENT, READ_ONLY ADMIN
   ON *.* TO '${monitor_user}'@'%';
 GRANT SELECT ON mysql.user TO '${monitor_user}'@'%';
 GRANT SELECT ON mysql.global_priv TO '${monitor_user}'@'%';
 GRANT SELECT ON mysql.roles_mapping TO '${monitor_user}'@'%';
 
-CREATE USER IF NOT EXISTS '${service_user}'@'%' IDENTIFIED BY '${service_password}';
-ALTER USER '${service_user}'@'%' IDENTIFIED BY '${service_password}';
 GRANT SHOW DATABASES ON *.* TO '${service_user}'@'%';
 GRANT SELECT ON mysql.user TO '${service_user}'@'%';
 GRANT SELECT ON mysql.db TO '${service_user}'@'%';

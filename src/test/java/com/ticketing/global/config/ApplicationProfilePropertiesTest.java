@@ -22,7 +22,7 @@ class ApplicationProfilePropertiesTest {
             RedisProperties redis = context.getBean(RedisProperties.class);
 
             assertThat(dataSource.getUrl())
-                    .startsWith("jdbc:mariadb:sequential://localhost:14006,localhost:14007/");
+                    .startsWith("jdbc:mariadb:sequential://localhost:14006,localhost:14007,localhost:14008/");
             assertThat(dataSource.getUsername()).isEqualTo("ticketing");
             assertThat(redis.getSentinel()).isNotNull();
             assertThat(redis.getSentinel().getMaster()).isEqualTo("ticketing-master");

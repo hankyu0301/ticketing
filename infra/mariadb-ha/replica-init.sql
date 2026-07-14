@@ -1,2 +1,2 @@
-SET GLOBAL read_only = ON;
-CHANGE MASTER TO MASTER_USE_GTID=current_pos;
+-- Replication is configured by infra/mariadb-ha/bootstrap-mariadb-replication.sh.
+-- This file is intentionally left as a no-op to avoid embedding credentials in SQL.

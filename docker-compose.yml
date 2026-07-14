@@ -11,6 +11,8 @@ services:
         condition: service_healthy
       maxscale-2:
         condition: service_healthy
+      maxscale-3:
+        condition: service_healthy
       redis-sentinel-1:
         condition: service_healthy
       redis-sentinel-2:
@@ -21,7 +23,7 @@ services:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: dev
-      MARIADB_HA_JDBC_URL: jdbc:mariadb:sequential://maxscale-1:4006,maxscale-2:4006/ticketing?useUnicode=true&characterEncoding=utf8&allowMultiQueries=true&connectTimeout=2000
+      MARIADB_HA_JDBC_URL: jdbc:mariadb:sequential://maxscale-1:4006,maxscale-2:4006,maxscale-3:4006/ticketing?useUnicode=true&characterEncoding=utf8&connectTimeout=2000
       MARIADB_HA_APP_USER: ticketing
       MARIADB_HA_APP_PASSWORD: ${MARIADB_HA_APP_PASSWORD:-ticketing}
       REDIS_HA_PASSWORD: ${REDIS_HA_PASSWORD:-redis-ha-local}
@@ -35,8 +37,6 @@ services:
       SPRING_RABBITMQ_USERNAME: guest
       SPRING_RABBITMQ_PASSWORD: guest
       JAVA_OPTS: -Xms256m -Xmx512m
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     ports:
       - "8080:8080"
     restart: unless-stopped
@@ -49,8 +49,6 @@ services:
       MARIADB_DATABASE: ticketing
       MARIADB_USER: ticketing
       MARIADB_PASSWORD: ${MARIADB_HA_APP_PASSWORD:-ticketing}
-      MARIADB_REPLICATION_USER: replication
-      MARIADB_REPLICATION_PASSWORD: ${MARIADB_HA_REPLICATION_PASSWORD:-replication}
       MARIADB_HEALTHCHECK_GRANTS: REPLICA MONITOR
     ports:
       - "127.0.0.1:13306:3306"
@@ -74,16 +72,12 @@ services:
         condition: service_healthy
     environment:
       MARIADB_ROOT_PASSWORD: ${MARIADB_HA_ROOT_PASSWORD:-root}
-      MARIADB_MASTER_HOST: mariadb-primary
-      MARIADB_REPLICATION_USER: replication
-      MARIADB_REPLICATION_PASSWORD: ${MARIADB_HA_REPLICATION_PASSWORD:-replication}
       MARIADB_HEALTHCHECK_GRANTS: REPLICA MONITOR
     ports:
       - "127.0.0.1:13307:3306"
     volumes:
       - mariadb-replica-1-data:/var/lib/mysql
       - ./infra/mariadb-ha/replica-1.cnf:/etc/mysql/conf.d/ha.cnf:ro
-      - ./infra/mariadb-ha/replica-init.sql:/docker-entrypoint-initdb.d/01-replica-init.sql:ro
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       start_period: 30s
@@ -100,16 +94,12 @@ services:
         condition: service_healthy
     environment:
       MARIADB_ROOT_PASSWORD: ${MARIADB_HA_ROOT_PASSWORD:-root}
-      MARIADB_MASTER_HOST: mariadb-primary
-      MARIADB_REPLICATION_USER: replication
-      MARIADB_REPLICATION_PASSWORD: ${MARIADB_HA_REPLICATION_PASSWORD:-replication}
       MARIADB_HEALTHCHECK_GRANTS: REPLICA MONITOR
     ports:
       - "127.0.0.1:13308:3306"
     volumes:
       - mariadb-replica-2-data:/var/lib/mysql
       - ./infra/mariadb-ha/replica-2.cnf:/etc/mysql/conf.d/ha.cnf:ro
-      - ./infra/mariadb-ha/replica-init.sql:/docker-entrypoint-initdb.d/01-replica-init.sql:ro
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       start_period: 30s
@@ -118,9 +108,9 @@ services:
       retries: 20
     restart: unless-stopped
 
-  mariadb-ha-bootstrap:
+  mariadb-replication-bootstrap:
     image: mariadb:10.11.16
-    container_name: ticketing-ha-mariadb-bootstrap
+    container_name: ticketing-ha-mariadb-replication-bootstrap
     depends_on:
       mariadb-primary:
         condition: service_healthy
@@ -128,6 +118,21 @@ services:
         condition: service_healthy
       mariadb-replica-2:
         condition: service_healthy
+    environment:
+      MARIADB_HA_ROOT_PASSWORD: ${MARIADB_HA_ROOT_PASSWORD:-root}
+      MARIADB_REPLICATION_USER: replication
+      MARIADB_REPLICATION_PASSWORD: ${MARIADB_HA_REPLICATION_PASSWORD:-replication}
+    volumes:
+      - ./infra/mariadb-ha/bootstrap-mariadb-replication.sh:/usr/local/bin/bootstrap-mariadb-replication.sh:ro
+    entrypoint: ["/bin/bash", "/usr/local/bin/bootstrap-mariadb-replication.sh"]
+    restart: "no"
+
+  mariadb-ha-bootstrap:
+    image: mariadb:10.11.16
+    container_name: ticketing-ha-mariadb-bootstrap
+    depends_on:
+      mariadb-replication-bootstrap:
+        condition: service_completed_successfully
     environment:
       MARIADB_HA_ROOT_PASSWORD: ${MARIADB_HA_ROOT_PASSWORD:-root}
       MAXSCALE_MONITOR_USER: ${MAXSCALE_MONITOR_USER:-maxscale_monitor}
@@ -163,6 +168,7 @@ services:
       MAXSCALE_MONITOR_PASSWORD: ${MAXSCALE_MONITOR_PASSWORD:-maxscale_monitor}
       MAXSCALE_SERVICE_USER: ${MAXSCALE_SERVICE_USER:-maxscale_service}
       MAXSCALE_SERVICE_PASSWORD: ${MAXSCALE_SERVICE_PASSWORD:-maxscale_service}
+      # Used by MaxScale mariadbmon for failover/rejoin replication management.
       MARIADB_REPLICATION_USER: replication
       MARIADB_REPLICATION_PASSWORD: ${MARIADB_HA_REPLICATION_PASSWORD:-replication}
     ports:
@@ -191,6 +197,7 @@ services:
       MAXSCALE_MONITOR_PASSWORD: ${MAXSCALE_MONITOR_PASSWORD:-maxscale_monitor}
       MAXSCALE_SERVICE_USER: ${MAXSCALE_SERVICE_USER:-maxscale_service}
       MAXSCALE_SERVICE_PASSWORD: ${MAXSCALE_SERVICE_PASSWORD:-maxscale_service}
+      # Used by MaxScale mariadbmon for failover/rejoin replication management.
       MARIADB_REPLICATION_USER: replication
       MARIADB_REPLICATION_PASSWORD: ${MARIADB_HA_REPLICATION_PASSWORD:-replication}
     ports:
@@ -208,9 +215,41 @@ services:
       retries: 20
     restart: unless-stopped
 
+  maxscale-3:
+    image: mariadb/maxscale:24.02.9-ubi-2
+    container_name: ticketing-ha-maxscale-3
+    depends_on:
+      mariadb-role-reconcile:
+        condition: service_completed_successfully
+    environment:
+      MAXSCALE_MONITOR_USER: ${MAXSCALE_MONITOR_USER:-maxscale_monitor}
+      MAXSCALE_MONITOR_PASSWORD: ${MAXSCALE_MONITOR_PASSWORD:-maxscale_monitor}
+      MAXSCALE_SERVICE_USER: ${MAXSCALE_SERVICE_USER:-maxscale_service}
+      MAXSCALE_SERVICE_PASSWORD: ${MAXSCALE_SERVICE_PASSWORD:-maxscale_service}
+      # Used by MaxScale mariadbmon for failover/rejoin replication management.
+      MARIADB_REPLICATION_USER: replication
+      MARIADB_REPLICATION_PASSWORD: ${MARIADB_HA_REPLICATION_PASSWORD:-replication}
+    ports:
+      - "127.0.0.1:14008:4006"
+      - "127.0.0.1:18991:8989"
+    volumes:
+      - ./infra/mariadb-ha/maxscale/maxscale.cnf:/etc/maxscale.cnf:ro
+      - ./infra/mariadb-ha/maxscale/maxscale-healthcheck.sh:/usr/local/bin/maxscale-healthcheck.sh:ro
+      - maxscale-3-data:/var/lib/maxscale
+    healthcheck:
+      test: ["CMD", "/bin/bash", "/usr/local/bin/maxscale-healthcheck.sh"]
+      start_period: 20s
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
   redis-primary:
     image: redis:7.4.9-alpine
     container_name: ticketing-ha-redis-primary
+    networks:
+      default:
+        ipv4_address: 172.30.10.10
     environment:
       REDIS_PASSWORD: ${REDIS_HA_PASSWORD:-redis-ha-local}
     command:
@@ -222,15 +261,13 @@ services:
           --appendfsync everysec \
           --requirepass "$${REDIS_PASSWORD}" \
           --masterauth "$${REDIS_PASSWORD}" \
-          --replica-announce-ip host.docker.internal \
-          --replica-announce-port 16379 \
+          --replica-announce-ip redis-primary \
+          --replica-announce-port 6379 \
           --replica-read-only yes \
           --min-replicas-to-write 1 \
           --min-replicas-max-lag 10
     ports:
-      - "16379:6379"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - "127.0.0.1:16379:6379"
     volumes:
       - redis-primary-data:/data
     healthcheck:
@@ -248,6 +285,9 @@ services:
   redis-replica-1:
     image: redis:7.4.9-alpine
     container_name: ticketing-ha-redis-replica-1
+    networks:
+      default:
+        ipv4_address: 172.30.10.11
     depends_on:
       redis-primary:
         condition: service_healthy
@@ -262,16 +302,14 @@ services:
           --appendfsync everysec \
           --requirepass "$${REDIS_PASSWORD}" \
           --masterauth "$${REDIS_PASSWORD}" \
-          --replicaof host.docker.internal 16379 \
-          --replica-announce-ip host.docker.internal \
-          --replica-announce-port 16380 \
+          --replicaof 172.30.10.10 6379 \
+          --replica-announce-ip redis-replica-1 \
+          --replica-announce-port 6379 \
           --replica-read-only yes \
           --min-replicas-to-write 1 \
           --min-replicas-max-lag 10
     ports:
-      - "16380:6379"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - "127.0.0.1:16380:6379"
     volumes:
       - redis-replica-1-data:/data
     healthcheck:
@@ -289,6 +327,9 @@ services:
   redis-replica-2:
     image: redis:7.4.9-alpine
     container_name: ticketing-ha-redis-replica-2
+    networks:
+      default:
+        ipv4_address: 172.30.10.12
     depends_on:
       redis-primary:
         condition: service_healthy
@@ -303,16 +344,14 @@ services:
           --appendfsync everysec \
           --requirepass "$${REDIS_PASSWORD}" \
           --masterauth "$${REDIS_PASSWORD}" \
-          --replicaof host.docker.internal 16379 \
-          --replica-announce-ip host.docker.internal \
-          --replica-announce-port 16381 \
+          --replicaof 172.30.10.10 6379 \
+          --replica-announce-ip redis-replica-2 \
+          --replica-announce-port 6379 \
           --replica-read-only yes \
           --min-replicas-to-write 1 \
           --min-replicas-max-lag 10
     ports:
-      - "16381:6379"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - "127.0.0.1:16381:6379"
     volumes:
       - redis-replica-2-data:/data
     healthcheck:
@@ -330,6 +369,9 @@ services:
   redis-sentinel-1:
     image: redis:7.4.9-alpine
     container_name: ticketing-ha-redis-sentinel-1
+    networks:
+      default:
+        ipv4_address: 172.30.10.21
     depends_on:
       redis-primary:
         condition: service_healthy
@@ -339,11 +381,11 @@ services:
         condition: service_healthy
     environment:
       REDIS_MASTER_NAME: ${REDIS_HA_MASTER_NAME:-ticketing-master}
-      REDIS_MASTER_HOST: host.docker.internal
-      REDIS_MASTER_PORT: 16379
+      REDIS_MASTER_HOST: 172.30.10.10
+      REDIS_MASTER_PORT: 6379
       REDIS_PASSWORD: ${REDIS_HA_PASSWORD:-redis-ha-local}
       SENTINEL_PASSWORD: ${REDIS_HA_SENTINEL_PASSWORD:-sentinel-ha-local}
-      SENTINEL_ANNOUNCE_HOST: host.docker.internal
+      SENTINEL_ANNOUNCE_HOST: redis-sentinel-1
       SENTINEL_ANNOUNCE_PORT: 26379
       SENTINEL_QUORUM: 2
       SENTINEL_DOWN_AFTER_MILLISECONDS: 5000
@@ -351,9 +393,7 @@ services:
       SENTINEL_PARALLEL_SYNCS: 1
     entrypoint: ["/bin/sh", "/usr/local/bin/sentinel-entrypoint.sh"]
     ports:
-      - "26379:26379"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - "127.0.0.1:26379:26379"
     volumes:
       - ./infra/redis-ha/sentinel-entrypoint.sh:/usr/local/bin/sentinel-entrypoint.sh:ro
       - redis-sentinel-1-data:/data
@@ -372,6 +412,9 @@ services:
   redis-sentinel-2:
     image: redis:7.4.9-alpine
     container_name: ticketing-ha-redis-sentinel-2
+    networks:
+      default:
+        ipv4_address: 172.30.10.22
     depends_on:
       redis-primary:
         condition: service_healthy
@@ -381,21 +424,19 @@ services:
         condition: service_healthy
     environment:
       REDIS_MASTER_NAME: ${REDIS_HA_MASTER_NAME:-ticketing-master}
-      REDIS_MASTER_HOST: host.docker.internal
-      REDIS_MASTER_PORT: 16379
+      REDIS_MASTER_HOST: 172.30.10.10
+      REDIS_MASTER_PORT: 6379
       REDIS_PASSWORD: ${REDIS_HA_PASSWORD:-redis-ha-local}
       SENTINEL_PASSWORD: ${REDIS_HA_SENTINEL_PASSWORD:-sentinel-ha-local}
-      SENTINEL_ANNOUNCE_HOST: host.docker.internal
-      SENTINEL_ANNOUNCE_PORT: 26380
+      SENTINEL_ANNOUNCE_HOST: redis-sentinel-2
+      SENTINEL_ANNOUNCE_PORT: 26379
       SENTINEL_QUORUM: 2
       SENTINEL_DOWN_AFTER_MILLISECONDS: 5000
       SENTINEL_FAILOVER_TIMEOUT: 60000
       SENTINEL_PARALLEL_SYNCS: 1
     entrypoint: ["/bin/sh", "/usr/local/bin/sentinel-entrypoint.sh"]
     ports:
-      - "26380:26379"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - "127.0.0.1:26380:26379"
     volumes:
       - ./infra/redis-ha/sentinel-entrypoint.sh:/usr/local/bin/sentinel-entrypoint.sh:ro
       - redis-sentinel-2-data:/data
@@ -414,6 +455,9 @@ services:
   redis-sentinel-3:
     image: redis:7.4.9-alpine
     container_name: ticketing-ha-redis-sentinel-3
+    networks:
+      default:
+        ipv4_address: 172.30.10.23
     depends_on:
       redis-primary:
         condition: service_healthy
@@ -423,21 +467,19 @@ services:
         condition: service_healthy
     environment:
       REDIS_MASTER_NAME: ${REDIS_HA_MASTER_NAME:-ticketing-master}
-      REDIS_MASTER_HOST: host.docker.internal
-      REDIS_MASTER_PORT: 16379
+      REDIS_MASTER_HOST: 172.30.10.10
+      REDIS_MASTER_PORT: 6379
       REDIS_PASSWORD: ${REDIS_HA_PASSWORD:-redis-ha-local}
       SENTINEL_PASSWORD: ${REDIS_HA_SENTINEL_PASSWORD:-sentinel-ha-local}
-      SENTINEL_ANNOUNCE_HOST: host.docker.internal
-      SENTINEL_ANNOUNCE_PORT: 26381
+      SENTINEL_ANNOUNCE_HOST: redis-sentinel-3
+      SENTINEL_ANNOUNCE_PORT: 26379
       SENTINEL_QUORUM: 2
       SENTINEL_DOWN_AFTER_MILLISECONDS: 5000
       SENTINEL_FAILOVER_TIMEOUT: 60000
       SENTINEL_PARALLEL_SYNCS: 1
     entrypoint: ["/bin/sh", "/usr/local/bin/sentinel-entrypoint.sh"]
     ports:
-      - "26381:26379"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - "127.0.0.1:26381:26379"
     volumes:
       - ./infra/redis-ha/sentinel-entrypoint.sh:/usr/local/bin/sentinel-entrypoint.sh:ro
       - redis-sentinel-3-data:/data
@@ -460,8 +502,8 @@ services:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
@@ -482,6 +524,8 @@ volumes:
     name: ticketing-mariadb-ha_maxscale-1-data
   maxscale-2-data:
     name: ticketing-mariadb-ha_maxscale-2-data
+  maxscale-3-data:
+    name: ticketing-mariadb-ha_maxscale-3-data
   redis-primary-data:
     name: ticketing-redis-ha_redis-primary-data
   redis-replica-1-data:
@@ -496,3 +540,10 @@ volumes:
     name: ticketing-redis-ha_redis-sentinel-3-data
   rabbitmq-data:
     name: ticketing_rabbitmq-data
+
+networks:
+  default:
+    name: ticketing_default
+    ipam:
+      config:
+        - subnet: 172.30.10.0/24

@@ -2,7 +2,7 @@ spring:
   rabbitmq:
     dynamic: false
   datasource:
-    url: ${LOADTEST_MARIADB_JDBC_URL:jdbc:mariadb://localhost:3306/ticketing?useUnicode=true&characterEncoding=utf8&allowMultiQueries=true}
+    url: ${LOADTEST_MARIADB_JDBC_URL:jdbc:mariadb://localhost:3306/ticketing?useUnicode=true&characterEncoding=utf8}
     username: ${LOADTEST_MARIADB_USER:root}
     password: ${LOADTEST_MARIADB_PASSWORD:root}
     hikari:

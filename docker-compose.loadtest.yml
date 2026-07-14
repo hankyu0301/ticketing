@@ -11,7 +11,7 @@ services:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: loadtest
-      SPRING_DATASOURCE_URL: jdbc:mariadb://mariadb:3306/ticketing?useUnicode=true&characterEncoding=utf8&allowMultiQueries=true
+      SPRING_DATASOURCE_URL: jdbc:mariadb://mariadb:3306/ticketing?useUnicode=true&characterEncoding=utf8
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: root
       SPRING_DATA_REDIS_HOST: redis
