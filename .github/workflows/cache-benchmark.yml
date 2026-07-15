@@ -1,0 +1,135 @@
+name: cache-benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_gradle:
+        description: "Run Gradle cache benchmark"
+        type: boolean
+        required: true
+        default: true
+      run_docker:
+        description: "Run Docker BuildKit cache benchmark"
+        type: boolean
+        required: true
+        default: true
+      docker_cache_scope:
+        description: "Docker GHA cache scope for benchmark"
+        type: string
+        required: true
+        default: ticketing-docker-benchmark
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cache-benchmark-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  gradle-no-cache:
+    if: ${{ inputs.run_gradle }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 17 without Gradle cache
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Grant execute permission for Gradle
+        run: chmod +x ./gradlew
+
+      - name: Run tests without Gradle cache
+        env:
+          GRADLE_USER_HOME: ${{ runner.temp }}/gradle-no-cache
+        run: |
+          set -euo pipefail
+
+          start_seconds=$(date +%s)
+          ./gradlew test --no-daemon --console=plain
+          end_seconds=$(date +%s)
+
+          {
+            echo "### Gradle without cache"
+            echo ""
+            echo "- Duration: $((end_seconds - start_seconds)) seconds"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  gradle-with-cache:
+    if: ${{ inputs.run_gradle }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 17 with Gradle cache
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      - name: Grant execute permission for Gradle
+        run: chmod +x ./gradlew
+
+      - name: Run tests with Gradle cache
+        run: |
+          set -euo pipefail
+
+          start_seconds=$(date +%s)
+          ./gradlew test --no-daemon --console=plain
+          end_seconds=$(date +%s)
+
+          {
+            echo "### Gradle with cache"
+            echo ""
+            echo "- Duration: $((end_seconds - start_seconds)) seconds"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  docker-no-cache:
+    if: ${{ inputs.run_docker }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build Docker image without GHA cache
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          tags: ticketing-cache-benchmark:no-cache-${{ github.sha }}
+
+  docker-with-cache:
+    if: ${{ inputs.run_docker }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build Docker image with GHA cache
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          tags: ticketing-cache-benchmark:with-cache-${{ github.sha }}
+          cache-from: type=gha,scope=${{ inputs.docker_cache_scope }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.docker_cache_scope }}
