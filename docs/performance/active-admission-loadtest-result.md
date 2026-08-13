@@ -1,5 +1,7 @@
 # Active 사용자 수별 부하테스트 및 Admission 기준 도출 결과
 
+> 이 문서는 [빠른 실패 및 lock wait 튜닝](./reservation-fast-fail-loadtest-result.md) 이후 수행한 admission 실험입니다. 재현 가능한 최신 실행 절차는 [loadtest 가이드](../../loadtest/README.md)를 기준으로 합니다.
+
 ## 목적
 
 이번 실험의 목적은 현재 PC와 Docker 기반 loadtest 환경에서 한 번에 몇 명의 사용자를 active 상태로 열 수 있는지 확인하는 것이다.
@@ -12,7 +14,7 @@
 
 - 실행일: 2026-06-12
 - 환경: Docker loadtest
-- app endpoint: `http://localhost:18080`
+- app endpoint: `http://localhost:8080`
 - Spring profile: `loadtest`
 - DB: `ticketing-loadtest-mariadb`
 - Redis: `ticketing-loadtest-redis`
@@ -53,19 +55,20 @@
 각 단계는 다음 순서로 실행했다.
 
 ```bash
-./gradlew loadtestResetHotSchedule
-./gradlew loadtestResetRedisQueue
-./gradlew loadtestResetSlowLog
-./gradlew loadtestSeedRedisQueue -PactiveStartMemberId=30001 -PactiveCount={ACTIVE_COUNT} -PwaitingCount=0
-k6 run \
-  -e BASE_URL=http://localhost:18080 \
-  -e SCENARIO=stress-reservation-contention \
-  -e TARGETS_FILE=loadtest/k6/data/targets.contention-500.json \
-  -e LOAD_PROFILE=baseline \
-  -e PRE_ALLOCATED_VUS={ACTIVE_COUNT} \
-  -e MAX_VUS={ACTIVE_COUNT} \
-  -e RESULT_BASENAME=loadtest/k6/results/active-admission-{ACTIVE_COUNT}-150rps-2m \
-  loadtest/k6/main.js
+active_count=500 # 300, 500, 1000, 1500, 2000으로 바꿔 반복
+
+bash ./gradlew loadtestResetHotSchedule
+bash ./gradlew loadtestResetRedisQueue
+bash ./gradlew loadtestResetSlowLog
+bash ./gradlew loadtestSeedRedisQueue \
+  -PactiveStartMemberId=30001 -PactiveCount="$active_count" -PwaitingCount=0
+bash ./gradlew loadtestRunK6 \
+  -Pscenario=stress-reservation-contention \
+  -Ptargets=loadtest/k6/data/targets.contention-500.json \
+  -Pprofile=baseline \
+  -PpreAllocatedVus="$active_count" \
+  -PmaxVus="$active_count" \
+  -Presult="loadtest/k6/results/active-admission-${active_count}-150rps-2m"
 ```
 
 ## k6 결과
@@ -155,13 +158,14 @@ active 1000명은 안정 구간으로 확인됐다.
 - 단일 인스턴스, 현재 PC, Docker 기반 결과다.
 - active 2000에서 병목이 드러나지 않아 실제 한계점은 아직 찾지 못했다.
 
-따라서 현재 단계에서는 다음 판단이 적절하다.
+운영 기본 설정과 loadtest 전용 설정을 구분하면 다음과 같다.
 
-| 설정 | 판단 |
-| --- | --- |
-| `queue.max-active-member=1000` | 유지 가능. 현재 환경에서는 보수적 안정 기준 |
-| `queue.enter-batch-size=500` | 유지 가능. active 1000 기준 50% batch admission |
-| active 1500~2000 | 확장 가능 후보. 대기열 포함 시나리오와 더 높은 요청률에서 재검증 필요 |
+| 설정 | 현재 값 | 판단 |
+| --- | ---: | --- |
+| `application.yml`의 `queue.max-active-member` | `1000` | 유지 가능. 현재 환경에서는 보수적 안정 기준 |
+| `application.yml`의 `queue.enter-batch-size` | `50` | 이번 실험은 queue enter를 우회했으므로 변경 근거로 사용하지 않음 |
+| `application-loadtest.yml`의 `queue.enter-batch-size` | `500` | loadtest에서 active 1000 대비 50% batch 조건을 만들기 위한 실험값 |
+| active 확장 후보 | `1500~2000` | 대기열 포함 시나리오와 더 높은 요청률에서 재검증 필요 |
 
 ## 결과 파일
 

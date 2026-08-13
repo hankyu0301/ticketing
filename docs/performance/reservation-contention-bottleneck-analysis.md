@@ -1,5 +1,7 @@
 # 예약 좌석 경합 병목 탐색 결과
 
+> 이 문서는 2026-06-10~11의 빠른 실패 적용 전 병목 진단 기록입니다. 이후 Redis 예약 불가 캐시와 `200ms` lock wait를 적용한 결과는 [빠른 실패 및 lock wait 튜닝](./reservation-fast-fail-loadtest-result.md), admission 결과는 [Active admission 기준](./active-admission-loadtest-result.md)에서 확인할 수 있습니다. 최신 실행 방법은 [loadtest 가이드](../../loadtest/README.md)를 기준으로 합니다.
+
 ## 1. 목적
 
 이번 문서는 좌석 경합 부하테스트에서 관측되는 지연이 어디에서 발생하는지 좁히기 위한 실험 기록이다.
@@ -352,7 +354,7 @@ burst 해석:
 
 즉 실패 요청은 비즈니스 로직 안에서는 빠르게 "이미 예약된 좌석"으로 판단된다. 하지만 그 판단 지점에 도달하기 전, 같은 `seat:10001` Redisson lock을 얻기 위해 줄을 서면서 대기 시간이 커졌다.
 
-현재 예약 흐름은 `DistributedLockReservationFacade`가 `seat:{seatId}` 단위 lock을 잡고, lock 안에서 `DefaultReservationService.reserve()`를 실행한다. 단일 좌석으로 300명이 동시에 들어오면 성공 1건 이후의 실패 요청도 lock을 획득한 뒤에야 좌석 상태를 읽고 실패한다. 이 구조에서는 중복 예약을 막는 대신, 동일 좌석 실패 응답도 lock 대기열을 거치게 된다.
+실험 당시 예약 흐름은 `DistributedLockReservationFacade`가 `seat:{seatId}` 단위 lock을 잡고, lock 안에서 `DefaultReservationService.reserve()`를 실행했다. 단일 좌석으로 300명이 동시에 들어오면 성공 1건 이후의 실패 요청도 lock을 획득한 뒤에야 좌석 상태를 읽고 실패했다. 이 구조에서는 중복 예약을 막는 대신, 동일 좌석 실패 응답도 lock 대기열을 거치게 된다.
 
 ### 7.3 Actuator/Hikari/Tomcat 결과
 
@@ -498,13 +500,23 @@ collector 없는 실행에서는 p95가 다시 1초대까지 내려갔다. 하�
 
 다만 p95의 절대값은 관측 부하와 burst 진입률에 영향을 받았다. collector 없는 control run에서는 p95가 낮아졌지만 47건의 connection refused가 발생했으므로, 해당 결과 역시 안정 기준선으로 쓰기 어렵다.
 
-5. 현재 구조는 정합성에는 강하지만 동일 좌석 실패 응답이 lock 대기열을 탄다.
+5. 실험 당시 구조는 정합성에는 강하지만 동일 좌석 실패 응답이 lock 대기열을 탔다.
 
-`seat:{seatId}` 단위 lock 안에서 좌석 상태를 확인하기 때문에 중복 예약은 막힌다. 대신 이미 예약된 좌석에 대한 실패 요청도 lock을 획득할 때까지 기다린다. 이 지연은 코드 오류라기보다 현재 동시성 제어 전략의 비용이다.
+`seat:{seatId}` 단위 lock 안에서 좌석 상태를 확인했기 때문에 중복 예약은 막혔다. 대신 이미 예약된 좌석에 대한 실패 요청도 lock을 획득할 때까지 기다렸다. 이 지연은 코드 오류라기보다 당시 동시성 제어 전략의 비용이었다.
 
-## 9. 다음 진행 방향
+## 9. 후속 진행 방향과 반영 결과
 
-이제 다음 단계는 "병목 위치 탐색"과 "안정 기준선 측정"을 분리해야 한다.
+이 실험에서 제안한 방향 중 빠른 실패와 admission 비교는 후속 작업으로 완료했습니다.
+
+| 제안 | 반영 상태 |
+| --- | --- |
+| Redis 예약 불가 캐시로 lock 진입 전 실패 | 적용 완료 |
+| lock wait time 단축 | `200ms`로 적용 완료 |
+| active 사용자 수별 안정 구간 비교 | 300~2000명 조건으로 완료 |
+| DB 조건부 갱신을 통한 최종 정합성 방어 | 이후 [DefaultReservationService](../../src/main/java/com/ticketing/application/reservation/service/DefaultReservationService.java)에 적용 |
+| waiting queue와 예약 부하의 end-to-end 검증 | 미완료 |
+
+병목 위치 탐색과 안정 기준선 측정은 앞으로도 다음처럼 분리해 해석합니다.
 
 ### 9.1 diagnostic run과 baseline run 분리
 
@@ -519,7 +531,7 @@ diagnostic run은 관측 오버헤드를 감수하고 병목 위치를 찾는 �
 
 ### 9.2 active admission 기준선 측정
 
-단일 좌석 300명 동시 진입은 collector 포함 실행에서는 실패 p95를 4초 이상으로 만들었고, collector 없는 실행에서는 일부 요청이 connection refused로 튕겼다. 따라서 active 사용자를 한 번에 얼마나 열어줄지 결정하는 기준선이 필요하다.
+단일 좌석 300명 동시 진입은 collector 포함 실행에서는 실패 p95를 4초 이상으로 만들었고, collector 없는 실행에서는 일부 요청이 connection refused로 튕겼다. 따라서 active 사용자를 한 번에 얼마나 열어줄지 결정하는 기준선이 필요했다.
 
 후속 실험:
 
@@ -529,15 +541,17 @@ diagnostic run은 관측 오버헤드를 감수하고 병목 위치를 찾는 �
 - connection refused 또는 unexpected failure가 발생하는 지점 확인
 - 현재 PC 기준 권장 active batch size 도출
 
+후속 [Active admission 실험](./active-admission-loadtest-result.md)에서는 150 iterations/s, 인기 좌석 500석 조건에서 active 1000명을 보수적 기준으로 유지했고, 1500명과 2000명도 관측 범위에서는 안정적으로 통과했습니다.
+
 ### 9.3 실패 응답 fast-fail 전략 검토
 
-현재 구조는 실패 요청도 lock을 기다린다. 실패 응답 지연을 줄이고 싶다면 다음 전략을 검토할 수 있다.
+실험 당시 구조는 실패 요청도 lock을 기다렸다. 당시 검토한 전략은 다음과 같다.
 
 - lock 밖에서 좌석 상태를 먼저 조회해 이미 예약된 좌석은 빠르게 거절
 - 좌석 sold-out 상태를 Redis cache에 반영하고, lock 진입 전 fast-fail
 - lock wait time을 줄여 일정 시간 안에 lock을 못 얻으면 빠르게 실패
 
-다만 이 전략들은 운영 코드의 동시성 정책을 바꾸는 작업이다. 정합성 리스크가 있으므로 loadtest 전용 코드로 숨길 문제가 아니라, 실제 서비스 정책으로 선택할지 검토해야 한다.
+이후 DB 상태를 lock 밖에서 먼저 읽는 방식 대신 Redis 예약 불가 캐시를 사용해 이미 점유된 좌석을 빠르게 거절하고, lock wait 상한을 `200ms`로 줄였습니다. 효과와 정합성 결과는 [빠른 실패 결과](./reservation-fast-fail-loadtest-result.md)에 기록했습니다.
 
 ### 9.4 포트폴리오 정리 포인트
 
@@ -545,6 +559,6 @@ diagnostic run은 관측 오버헤드를 감수하고 병목 위치를 찾는 �
 
 - 단일 좌석 경합에서 중복 예약은 발생하지 않았다.
 - diagnostic run 기준, 애플리케이션에 진입한 요청의 지연은 DB row lock이나 Hikari 대기가 아니라 Redis 분산락 대기 구간에서 발생했다.
-- 실패 요청도 lock 안에서 좌석 상태를 확인하기 때문에, 경합이 큰 좌석일수록 실패 응답이 느려진다.
+- 실험 당시에는 실패 요청도 lock 안에서 좌석 상태를 확인했기 때문에, 경합이 큰 좌석일수록 실패 응답이 느려졌다.
 - 다만 짧은 burst의 절대 p95는 관측 부하와 connection refused 여부에 흔들리므로, 기준선 측정은 collector 최소화 후 반복 실행으로 별도 수행해야 한다.
 - 따라서 해결 방향은 Tomcat/Hikari 증설이 아니라 active admission 조절, accept backlog 검토, fast-fail 정책 검토다.

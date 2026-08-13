@@ -1,5 +1,7 @@
 # 예약 경합 빠른 실패 및 Lock Wait 튜닝 결과
 
+> 이 문서는 [단일 좌석 경합 병목 탐색](./reservation-contention-bottleneck-analysis.md)에서 확인한 분산락 대기를 개선한 결과입니다. 후속 admission 검증은 [Active admission 기준](./active-admission-loadtest-result.md), 최신 재현 절차는 [loadtest 가이드](../../loadtest/README.md)를 참고합니다.
+
 ## 문서 목적
 
 이 문서는 좌석 경합 부하테스트에서 내린 두 가지 의사결정을 분리해서 정리한다.
@@ -28,6 +30,8 @@
 - 최종 반영 설정:
   - `application.yml`: `ticketing.lock.wait-time-ms=200`
   - `application-loadtest.yml`: `ticketing.lock.wait-time-ms=200`
+
+이 측정 이후 DB 조건부 갱신이 [DefaultReservationService](../../src/main/java/com/ticketing/application/reservation/service/DefaultReservationService.java)에 추가됐습니다. 따라서 이 문서의 수치는 Redis 분산락·예약 불가 캐시·lock wait 개선 효과를 나타내며, 이후 추가된 DB 최종 정합성 방어의 성능을 별도로 비교한 값은 아닙니다.
 
 ## Seed 상태
 

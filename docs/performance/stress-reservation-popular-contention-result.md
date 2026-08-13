@@ -1,5 +1,7 @@
 # 인기 좌석군 경합 부하테스트 결과
 
+> 이 문서는 2026-06-09에 수행한 초기 2,000석 경합 기준선입니다. 이후 [병목 탐색](./reservation-contention-bottleneck-analysis.md), [빠른 실패 및 lock wait 튜닝](./reservation-fast-fail-loadtest-result.md), [active admission 검증](./active-admission-loadtest-result.md) 순서로 실험을 확장했습니다. 최신 실행 절차는 [loadtest 가이드](../../loadtest/README.md)를 기준으로 합니다.
+
 ## 1. 실행 목적
 
 이번 테스트의 목적은 실제 티켓팅 상황처럼 좌석을 인기순 구역으로 나누고, active 상태의 사용자들이 동일한 인기 좌석군에 몰릴 때 중복 예약 방지가 정상 동작하는지 확인하는 것이다.
@@ -73,33 +75,47 @@ Baseline 좌석군은 다음과 같다.
 
 Smoke 실행 전 초기화:
 
-```powershell
-./gradlew loadtestRunInfra --no-daemon --console=plain
-./gradlew loadtestResetHotSchedule --no-daemon --console=plain
-./gradlew loadtestResetRedisQueue --no-daemon --console=plain
-./gradlew loadtestSeedRedisQueue "-PactiveStartMemberId=20101" "-PactiveCount=50" "-PwaitingCount=0" --no-daemon --console=plain
-./gradlew loadtestResetSlowLog "-PlongQueryTime=0.05" --no-daemon --console=plain
+```bash
+bash ./gradlew loadtestRunReset --no-daemon --console=plain
+bash ./gradlew loadtestResetHotSchedule --no-daemon --console=plain
+bash ./gradlew loadtestResetRedisQueue --no-daemon --console=plain
+bash ./gradlew loadtestSeedRedisQueue \
+  -PactiveStartMemberId=20101 -PactiveCount=50 -PwaitingCount=0 \
+  --no-daemon --console=plain
+bash ./gradlew loadtestResetSlowLog -PlongQueryTime=0.05 --no-daemon --console=plain
 ```
 
 Smoke 실행:
 
-```powershell
-./gradlew loadtestRunK6 "-Pscenario=stress-reservation-contention" "-Ptargets=loadtest/k6/data/targets.smoke.json" "-Pprofile=smoke" "-Presult=loadtest/k6/results/stress-contention-popular-smoke" --no-daemon --console=plain
+```bash
+bash ./gradlew loadtestRunK6 \
+  -Pscenario=stress-reservation-contention \
+  -Ptargets=loadtest/k6/data/targets.smoke.json \
+  -Pprofile=smoke \
+  -Presult=loadtest/k6/results/stress-contention-popular-smoke \
+  --no-daemon --console=plain
 ```
 
 Baseline 실행 전 초기화:
 
-```powershell
-./gradlew loadtestResetHotSchedule --no-daemon --console=plain
-./gradlew loadtestResetRedisQueue --no-daemon --console=plain
-./gradlew loadtestSeedRedisQueue "-PactiveStartMemberId=30001" "-PactiveCount=500" "-PwaitingCount=0" --no-daemon --console=plain
-./gradlew loadtestResetSlowLog "-PlongQueryTime=0.05" --no-daemon --console=plain
+```bash
+bash ./gradlew loadtestResetHotSchedule --no-daemon --console=plain
+bash ./gradlew loadtestResetRedisQueue --no-daemon --console=plain
+bash ./gradlew loadtestSeedRedisQueue \
+  -PactiveStartMemberId=30001 -PactiveCount=500 -PwaitingCount=0 \
+  --no-daemon --console=plain
+bash ./gradlew loadtestResetSlowLog -PlongQueryTime=0.05 --no-daemon --console=plain
 ```
 
 Baseline 실행:
 
-```powershell
-./gradlew loadtestRunK6 "-Pscenario=stress-reservation-contention" "-Ptargets=loadtest/k6/data/targets.large.json" "-Pprofile=baseline" "-Presult=loadtest/k6/results/stress-contention-popular-baseline" --no-daemon --console=plain
+```bash
+bash ./gradlew loadtestRunK6 \
+  -Pscenario=stress-reservation-contention \
+  -Ptargets=loadtest/k6/data/targets.large.json \
+  -Pprofile=baseline \
+  -Presult=loadtest/k6/results/stress-contention-popular-baseline \
+  --no-daemon --console=plain
 ```
 
 ## 5. Smoke 결과
@@ -188,7 +204,7 @@ k6 세부 지표는 다음과 같다.
 
 p95를 가장 크게 끌어올린 값은 `http_req_waiting`이다. 즉 k6 기준으로는 서버 응답 첫 바이트를 기다리는 시간이 길었다.
 
-성공 응답만 따로 보면 `http_req_duration{expected_response:true}`의 p95는 약 1,275.77ms였다. 이는 실제 좌석을 획득한 요청이 `SELECT FOR UPDATE`, 좌석 상태 변경, 예약 INSERT, COMMIT을 모두 수행하기 때문이다. 반대로 좌석이 이미 선점된 뒤의 실패 요청은 더 빠르게 반환될 수 있다.
+성공 응답만 따로 보면 `http_req_duration{expected_response:true}`의 p95는 약 1,275.77ms였다. 이는 실제 좌석을 획득한 요청이 Redis 분산락, 좌석 조회·상태 변경, 예약 INSERT, COMMIT을 모두 수행하기 때문이다. 반대로 좌석이 이미 선점된 뒤의 실패 요청은 더 빠르게 반환될 수 있다.
 
 Actuator의 `/api/v1/reservations` 누적 요청 수는 smoke와 baseline을 합쳐 18,046건이었다.
 
@@ -219,28 +235,15 @@ Actuator의 `/api/v1/reservations` 누적 요청 수는 smoke와 baseline을 합
 - k6의 `http_req_failed`는 400 비즈니스 실패까지 실패로 집계하므로, 장애율로 해석하면 안 된다.
 - Actuator 지표는 smoke와 baseline 이후의 누적값이므로, k6 summary JSON을 1차 근거로 사용해야 한다.
 
-## 11. 다음 진행 방향
+## 11. 후속 검증 상태
 
-다음 실험은 세 갈래로 분리하는 것이 좋다.
+이 기준선에서 확인한 다음 과제는 이후 문서에서 다음과 같이 진행했습니다.
 
-1. active 사용자 한계 테스트
+| 과제 | 상태 | 결과 문서 |
+| --- | --- | --- |
+| 성공·실패 duration 분리와 단일 좌석 burst 병목 탐색 | 완료 | [예약 좌석 경합 병목 탐색](./reservation-contention-bottleneck-analysis.md) |
+| 예약 불가 캐시와 lock wait 기반 빠른 실패 | 완료 | [빠른 실패 및 lock wait 튜닝](./reservation-fast-fail-loadtest-result.md) |
+| active 300~2000명 admission 비교 | 완료 | [Active admission 기준](./active-admission-loadtest-result.md) |
+| waiting queue와 예약 부하를 결합한 end-to-end admission 검증 | 미완료 | 후속 과제 |
 
-현재 PC 기준으로 active 사용자 수를 300, 500, 1000, 1500으로 바꿔 실행한다. 목적은 "한 번에 몇 명까지 active로 열어도 현재 설정에서 안정적인가"를 찾는 것이다.
-
-2. 대기열 포함 시나리오
-
-waiting 10,000명과 active batch N명을 함께 둔 상태에서 Redis polling, admission, active 전환 비용이 예약 부하와 같이 들어올 때도 유지되는지 확인한다.
-
-3. 서버 내부 구간 타이머 보강
-
-이번 결과에서는 k6의 waiting 시간이 커졌지만, 서버 내부의 어느 구간이 그 시간을 만들었는지는 아직 부족하다. 운영 코드를 침범하지 않으려면 `loadtest` profile 전용 계측을 두고, 예약 성공 요청에 한해 다음 구간을 측정하는 것이 좋다.
-
-- 예약 facade 전체
-- Redis active token 확인
-- 좌석 조회 및 lock 획득
-- 좌석 상태 변경
-- 예약 INSERT
-- 트랜잭션 commit 전후
-
-단, `reservation.lock` 자체는 이미 lock 획득과 executor 실행 정도로 작게 나뉘어 있으므로, 무리하게 더 쪼개기보다는 "성공 요청의 쓰기 트랜잭션 구간"을 중심으로 보는 편이 낫다.
-
+따라서 이 문서의 2,000석 결과는 초기 정합성 기준선으로 사용하고, 현재 포트폴리오의 대표 경합 성능 수치는 빠른 실패 적용 후의 500석 결과를 사용합니다.

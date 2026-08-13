@@ -1,5 +1,7 @@
 # 예약 시스템 부하테스트 및 성능 개선 요약
 
+> 이 문서는 경합 없는 고유 좌석 예약의 초기 처리량 기준선입니다. 이후 실험은 [인기 좌석군 경합](./stress-reservation-popular-contention-result.md) → [병목 탐색](./reservation-contention-bottleneck-analysis.md) → [빠른 실패 튜닝](./reservation-fast-fail-loadtest-result.md) → [active admission 검증](./active-admission-loadtest-result.md) 순서로 이어집니다. 최신 실행 방법은 [loadtest 가이드](../../loadtest/README.md)를 기준으로 합니다.
+
 ## 1. 테스트 목적
 
 이 부하테스트의 목적은 동일 좌석 경합이 없는 예약 생성 흐름에서 현재 테스트 환경이 어느 정도의 요청량을 안정적으로 처리할 수 있는지 확인하는 것이다.
@@ -104,7 +106,7 @@ DB mapper p95와 row lock wait가 낮았기 때문에, 현재 시나리오에서
 
 가장 큰 내부 비용은 Redisson lock executor를 포함한 reservation facade 구간이었다. 다만 이는 비정상 병목이라기보다, Redis 기반 분산락을 사용하는 구조에서 발생하는 자연스러운 비용으로 해석한다.
 
-현재 구조에서 `reservation.facade`와 `reservation.lock`이 거의 같은 값을 보이는 것도 자연스럽다. `DistributedLockReservationFacade`는 lock executor를 호출하고, lock executor 안에서 예약 service를 실행하기 때문이다.
+측정 당시 구조에서 `reservation.facade`와 `reservation.lock`이 거의 같은 값을 보이는 것도 자연스럽다. `DistributedLockReservationFacade`는 lock executor를 호출하고, lock executor 안에서 예약 service를 실행하기 때문이다.
 
 ```text
 ReservationFacade
@@ -227,6 +229,8 @@ slow query dump 기준 상위 항목은 대부분 `COMMIT`이었다.
 | 최대 query time | `0.134251s` |
 | row lock wait | 0 |
 
+`Slow queries delta=73`은 서버 상태 카운터의 실행 전후 차이이고, `slow query count=78`은 slow log 테이블 조회값입니다. 원본 기록만으로 두 수치의 수집 구간이 완전히 같았다고 보장할 수 없으므로 일대일 비교하지 않고, 쿼리 내용 분석에는 slow log dump를 사용했습니다.
+
 이 결과는 DB statement 자체보다 transaction commit 단계에서 일부 tail latency가 발생한다는 신호다. 다만 mapper Timer의 p95가 낮고 slow query도 outlier 성격이므로, 현재 p95의 중심 원인을 DB query 실행계획 문제로 보기는 어렵다.
 
 따라서 현재 단계에서는 모든 SQL을 전면 튜닝하기보다, 이후 경합 시나리오에서 DB row lock wait와 transaction commit tail을 다시 확인하는 것이 합리적이다.
@@ -249,21 +253,19 @@ slow query dump 기준 상위 항목은 대부분 `COMMIT`이었다.
 - active admission 정책이 최종 확정됐다는 것
 - 인기 좌석군에 요청이 몰리는 실제 티켓팅형 경합을 검증했다는 것
 
-## 10. 다음 테스트 방향
+## 10. 후속 테스트 진행 상태
 
-다음 단계는 단일 좌석 하나에만 요청을 몰아넣는 테스트가 아니라, 실제 티켓팅에 가까운 인기 좌석군 경합 테스트다.
+이 기준선에서 제시한 후속 과제는 다음과 같이 진행했습니다.
 
-예상 구조는 다음과 같다.
+| 후속 과제 | 상태 | 결과 |
+| --- | --- | --- |
+| 인기 좌석군 경합과 중복 예약 검증 | 완료 | [인기 좌석군 경합 결과](./stress-reservation-popular-contention-result.md) |
+| 성공·실패 지연 분리와 단일 좌석 burst 병목 탐색 | 완료 | [예약 좌석 경합 병목 탐색](./reservation-contention-bottleneck-analysis.md) |
+| 예약 불가 캐시와 lock wait 빠른 실패 | 완료 | [빠른 실패 및 lock wait 튜닝](./reservation-fast-fail-loadtest-result.md) |
+| active 300 / 500 / 1000 / 1500 / 2000 비교 | 완료 | [Active admission 기준](./active-admission-loadtest-result.md) |
+| waiting queue와 예약 부하를 결합한 end-to-end 검증 | 미완료 | 후속 과제 |
 
-| 시나리오 | 목적 |
-| --- | --- |
-| 인기 구역 A | 소수 좌석에 다수 요청 집중 |
-| 인기 구역 B | 중간 규모 좌석군 경합 |
-| 일반 구역 C | 낮은 경합 구간 비교 |
-| active admission 단계 테스트 | active 300 / 500 / 1000 / 1500 기준 안정 구간 확인 |
-| 대기열 포함 검증 | waiting 사용자와 active 사용자가 함께 있을 때 queue polling/진입 비용 확인 |
-
-최종 목표는 현재 PC 기준으로 한 번에 몇 명을 active로 열 수 있는지, 그리고 어떤 지점부터 p95, 실패율, lock 대기, DB row lock wait가 악화되는지 확인하는 것이다.
+이 문서의 수치는 고유 좌석 기준선으로 유지하며, 경합 상황의 대표 수치는 빠른 실패 적용 이후 문서를 사용합니다.
 
 ## 11. 요약
 
@@ -271,4 +273,4 @@ slow query dump 기준 상위 항목은 대부분 `COMMIT`이었다.
 
 60초 동안 30,000건의 예약 요청을 처리하며 Tomcat, Hikari, Redis, DB slow query를 함께 관측했고, thread/pool 설정 조정 후 현재 테스트 환경에서 dropped 없이 처리 가능한 기준선을 확보했다.
 
-이후 테스트는 실제 티켓팅에 가까운 인기 좌석군 경합과 active admission 한계 측정으로 확장한다.
+이후 인기 좌석군 경합, 단일 좌석 병목, 빠른 실패, active admission 실험으로 확장했으며 각 결과는 위 후속 문서에 분리해 기록했습니다.
