@@ -3,6 +3,9 @@ server:
   servlet:
     session:
       cookie:
+        secure: ${SESSION_COOKIE_SECURE:false}
+        http-only: true
+        path: /
         same-site: lax
 
 spring:
@@ -16,11 +19,6 @@ spring:
     redis:
       flush-mode: on_save
       namespace: spring:session
-
-    cookie:
-      secure: secure
-      http-only: true
-      path: /
 
   datasource:
     driver-class-name: org.mariadb.jdbc.Driver

@@ -15,9 +15,7 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.context.WebApplicationContext;
 
 import static com.ticketing.domain.member.exception.MemberErrorMessage.AUTHORIZED_BUT_NOT_AUTHENTICATED;
 import static com.ticketing.domain.member.exception.MemberErrorMessage.CHECK_EMAIL_OR_PSWD;
@@ -25,7 +23,6 @@ import static com.ticketing.domain.member.exception.MemberErrorMessage.LOGIN_REQ
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.authenticated;
 import static org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.unauthenticated;
-import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
@@ -46,9 +43,6 @@ class SecurityTest extends IntegrationTestSupport {
     private MockMvc mockMvc;
 
     @Autowired
-    private WebApplicationContext context;
-
-    @Autowired
     private MemberService memberService;
 
     @MockitoBean
@@ -56,11 +50,6 @@ class SecurityTest extends IntegrationTestSupport {
 
     @BeforeEach
     void beforeEach() {
-        mockMvc = MockMvcBuilders
-                .webAppContextSetup(context)
-                .apply(springSecurity())
-                .build();
-
         MemberSignupRequest memberSignupRequest = new MemberSignupRequest();
         ReflectionTestUtils.setField(memberSignupRequest, "email", MEMBER_LOGIN_EMAIL);
         ReflectionTestUtils.setField(memberSignupRequest, "password", MEMBER_LOGIN_PASSWORD);
@@ -136,7 +125,12 @@ class SecurityTest extends IntegrationTestSupport {
                         .param("password", MEMBER_LOGIN_PASSWORD))
                 .andDo(print())
                 .andExpect(authenticated())
-                .andExpect(status().is2xxSuccessful());
+                .andExpect(status().is2xxSuccessful())
+                .andExpect(cookie().exists("SESSION"))
+                .andExpect(cookie().httpOnly("SESSION", true))
+                .andExpect(cookie().secure("SESSION", false))
+                .andExpect(cookie().path("SESSION", "/"))
+                .andExpect(cookie().sameSite("SESSION", "Lax"));
     }
 
     @Test
