@@ -20,8 +20,13 @@ local ttl = tonumber(ARGV[4])
 local now = tonumber(ARGV[5])
 
 local reservationOpenAtMs = redis.call('HGET', metaKey, 'reservationOpenAtMs')
-if not reservationOpenAtMs then
+local concertDateMs = redis.call('HGET', metaKey, 'concertDateMs')
+if not reservationOpenAtMs or not concertDateMs then
     return -2
+end
+
+if tonumber(concertDateMs) <= now then
+    return -4
 end
 
 if tonumber(reservationOpenAtMs) > now then

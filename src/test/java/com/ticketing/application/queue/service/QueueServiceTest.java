@@ -112,6 +112,17 @@ class QueueServiceTest {
     }
 
     @Test
+    @DisplayName("공연 시작 이후 코드는 예매 종료 예외로 매핑한다")
+    void enterQueueFailAfterConcertStarts() {
+        given(queueRedisRepository.register(anyLong(), anyLong(), anyLong(), anyLong()))
+                .willReturn(-4L);
+
+        assertThatThrownBy(() -> queueService.enterQueue(1L, 1L))
+                .isInstanceOf(QueueBadRequestException.class)
+                .hasMessage(QueueErrorMessage.RESERVATION_CLOSED);
+    }
+
+    @Test
     @DisplayName("queue entry 결과가 not found면 queue 예외를 반환한다")
     void enterQueueFailError() {
         given(queueRedisRepository.register(anyLong(), anyLong(), anyLong(), anyLong()))
@@ -181,6 +192,16 @@ class QueueServiceTest {
         assertThatThrownBy(() -> queueService.getQueueStatus(1L, 1L))
                 .isInstanceOf(QueueBadRequestException.class)
                 .hasMessage(QueueErrorMessage.RESERVATION_NOT_OPEN);
+    }
+
+    @Test
+    @DisplayName("queue status에서 공연 시작 이후 코드를 예매 종료 예외로 매핑한다")
+    void getQueueStatusFailAfterConcertStarts() {
+        given(queueRedisRepository.getRank(anyLong(), anyLong())).willReturn(-4L);
+
+        assertThatThrownBy(() -> queueService.getQueueStatus(1L, 1L))
+                .isInstanceOf(QueueBadRequestException.class)
+                .hasMessage(QueueErrorMessage.RESERVATION_CLOSED);
     }
 
     @Test

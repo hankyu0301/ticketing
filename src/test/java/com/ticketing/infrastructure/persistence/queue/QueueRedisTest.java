@@ -76,6 +76,28 @@ class QueueRedisTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("공연 시작 이후이면 enter script는 reservation closed 코드를 반환한다")
+    void logicEnterFailsAfterConcertStarts() {
+        long now = System.currentTimeMillis();
+        queueRedisRepository.saveScheduleMeta(SCHEDULE_ID, now - 86_400_000, now - 1_000);
+
+        Long result = queueRedisRepository.register(SCHEDULE_ID, 100L, TEST_MAX_ACTIVE, 300000);
+
+        assertThat(result).isEqualTo(-4L);
+    }
+
+    @Test
+    @DisplayName("공연 시작 이후이면 status script는 reservation closed 코드를 반환한다")
+    void logicStatusFailsAfterConcertStarts() {
+        long now = System.currentTimeMillis();
+        queueRedisRepository.saveScheduleMeta(SCHEDULE_ID, now - 86_400_000, now - 1_000);
+
+        Long result = queueRedisRepository.getRank(SCHEDULE_ID, 100L);
+
+        assertThat(result).isEqualTo(-4L);
+    }
+
+    @Test
     @DisplayName("active가 비어 있으면 대기 없이 즉시 입장한다")
     void logicEnterFreePass() {
         Long memberId = 100L;

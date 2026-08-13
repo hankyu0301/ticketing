@@ -113,4 +113,20 @@ class DefaultReservationServiceConcurrencyIntegrationTest extends IntegrationTes
         );
         assertThat(reservationCount).isEqualTo(1L);
     }
+
+    @Test
+    @DisplayName("공연 시작 이후에는 DB 조건부 갱신도 좌석 예약을 거부한다")
+    void reserveConditionalUpdateRejectsAfterConcertStarts() {
+        jdbcTemplate.update(
+                "UPDATE concert_schedules SET concert_date = DATE_SUB(NOW(), INTERVAL 1 SECOND) WHERE schedule_id = ?",
+                scheduleId
+        );
+
+        int updatedRows = seatMapper.reserveIfAvailable(seatId, scheduleId, memberIds.get(0));
+
+        assertThat(updatedRows).isZero();
+        Seat seat = seatMapper.findById(seatId).orElseThrow();
+        assertThat(seat.getStatus()).isEqualTo(Seat.SeatStatus.AVAILABLE);
+        assertThat(seat.getMemberId()).isNull();
+    }
 }

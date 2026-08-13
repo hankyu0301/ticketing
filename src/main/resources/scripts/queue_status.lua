@@ -5,8 +5,13 @@
 -- ARGV[2]: current timestamp (ms)
 
 local metaOpenAt = redis.call('HGET', KEYS[3], 'reservationOpenAtMs')
-if not metaOpenAt then
+local metaConcertDate = redis.call('HGET', KEYS[3], 'concertDateMs')
+if not metaOpenAt or not metaConcertDate then
     return -2
+end
+
+if tonumber(metaConcertDate) <= tonumber(ARGV[2]) then
+    return -4
 end
 
 if tonumber(metaOpenAt) > tonumber(ARGV[2]) then

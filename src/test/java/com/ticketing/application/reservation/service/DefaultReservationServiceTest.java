@@ -1,10 +1,12 @@
 package com.ticketing.application.reservation.service;
 
 import com.ticketing.application.reservation.policy.ReservationExpirationPolicy;
+import com.ticketing.domain.concert.model.ConcertSchedule;
 import com.ticketing.domain.reservation.exception.ReservationBadRequestException;
 import com.ticketing.domain.reservation.model.Reservation;
 import com.ticketing.domain.seat.exception.SeatAlreadyReservedException;
 import com.ticketing.domain.seat.model.Seat;
+import com.ticketing.infrastructure.persistence.concert.ConcertScheduleMapper;
 import com.ticketing.infrastructure.persistence.reservation.ReservationMapper;
 import com.ticketing.infrastructure.persistence.seat.mapper.SeatMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -21,6 +23,7 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static com.ticketing.domain.reservation.exception.ReservationErrorMessage.SEAT_NOT_BELONG_TO_SCHEDULE;
+import static com.ticketing.domain.reservation.exception.ReservationErrorMessage.RESERVATION_CLOSED;
 import static com.ticketing.domain.seat.exception.SeatErrorMessage.ALREADY_RESERVED;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -39,6 +42,9 @@ class DefaultReservationServiceTest {
     private SeatMapper seatMapper;
 
     @Mock
+    private ConcertScheduleMapper concertScheduleMapper;
+
+    @Mock
     private ReservationExpirationPolicy reservationExpirationPolicy;
 
     @InjectMocks
@@ -55,6 +61,8 @@ class DefaultReservationServiceTest {
         given(reservationExpirationPolicy.calculateExpiredAt(any(LocalDateTime.class)))
                 .willAnswer(invocation -> invocation.getArgument(0, LocalDateTime.class).plusMinutes(30));
         given(seatMapper.findById(seatId)).willReturn(Optional.of(seat));
+        given(concertScheduleMapper.findById(scheduleId))
+                .willReturn(Optional.of(createSchedule(LocalDateTime.now().plusDays(1))));
         given(seatMapper.reserveIfAvailable(seatId, scheduleId, memberId)).willReturn(1);
 
         reservationService.reserve(seatId, memberId, scheduleId);
@@ -78,6 +86,8 @@ class DefaultReservationServiceTest {
         Seat seat = createSeat(scheduleId, seatId);
 
         given(seatMapper.findById(seatId)).willReturn(Optional.of(seat));
+        given(concertScheduleMapper.findById(scheduleId))
+                .willReturn(Optional.of(createSchedule(LocalDateTime.now().plusDays(1))));
         given(seatMapper.reserveIfAvailable(seatId, scheduleId, memberId)).willReturn(0);
 
         assertThatThrownBy(() -> reservationService.reserve(seatId, memberId, scheduleId))
@@ -106,9 +116,34 @@ class DefaultReservationServiceTest {
         verify(reservationMapper, never()).save(any());
     }
 
+    @Test
+    @DisplayName("공연 시작 이후에는 활성 토큰이 있어도 예약을 생성하지 않는다")
+    void reserveFailsAfterConcertStarts() {
+        Long seatId = 1L;
+        Long memberId = 10L;
+        Long scheduleId = 100L;
+        Seat seat = createSeat(scheduleId, seatId);
+
+        given(seatMapper.findById(seatId)).willReturn(Optional.of(seat));
+        given(concertScheduleMapper.findById(scheduleId))
+                .willReturn(Optional.of(createSchedule(LocalDateTime.now().minusSeconds(1))));
+
+        assertThatThrownBy(() -> reservationService.reserve(seatId, memberId, scheduleId))
+                .isInstanceOf(ReservationBadRequestException.class)
+                .hasMessage(RESERVATION_CLOSED);
+
+        verify(seatMapper, never()).reserveIfAvailable(any(), any(), any());
+        verify(reservationMapper, never()).save(any());
+        verify(reservationExpirationPolicy, never()).calculateExpiredAt(any());
+    }
+
     private Seat createSeat(Long scheduleId, Long seatId) {
         Seat seat = Seat.create(scheduleId, 1, "VIP", BigDecimal.valueOf(10000));
         ReflectionTestUtils.setField(seat, "seatId", seatId);
         return seat;
+    }
+
+    private ConcertSchedule createSchedule(LocalDateTime concertDate) {
+        return ConcertSchedule.create(1L, concertDate, concertDate.minusDays(1), 100);
     }
 }

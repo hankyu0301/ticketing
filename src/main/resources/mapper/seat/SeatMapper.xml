@@ -41,13 +41,15 @@
     </update>
 
     <update id="reserveIfAvailable">
-        UPDATE seats
-        SET status = 'TEMPORARY',
-            member_id = #{memberId},
-            updated_at = NOW()
-        WHERE seat_id = #{seatId}
-          AND schedule_id = #{scheduleId}
-          AND status = 'AVAILABLE'
+        UPDATE seats AS s
+        INNER JOIN concert_schedules AS cs ON cs.schedule_id = s.schedule_id
+        SET s.status = 'TEMPORARY',
+            s.member_id = #{memberId},
+            s.updated_at = NOW()
+        WHERE s.seat_id = #{seatId}
+          AND s.schedule_id = #{scheduleId}
+          AND s.status = 'AVAILABLE'
+          AND cs.concert_date > NOW()
     </update>
 
     <select id="findById" resultType="com.ticketing.domain.seat.model.Seat">

@@ -27,6 +27,7 @@ public class QueueService {
     private static final long QUEUE_NOT_FOUND = -1L;
     private static final long META_MISSING = -2L;
     private static final long RESERVATION_NOT_OPEN = -3L;
+    private static final long RESERVATION_CLOSED = -4L;
 
     private final QueueRedisRepository queueRedisRepository;
     private final QueueScheduleMetaLoader queueScheduleMetaLoader;
@@ -137,6 +138,10 @@ public class QueueService {
 
         if (result != null && result == RESERVATION_NOT_OPEN) {
             throw new QueueBadRequestException(QueueErrorMessage.RESERVATION_NOT_OPEN);
+        }
+
+        if (result != null && result == RESERVATION_CLOSED) {
+            throw new QueueBadRequestException(QueueErrorMessage.RESERVATION_CLOSED);
         }
 
         return result;
