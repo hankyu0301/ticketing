@@ -4,9 +4,9 @@ name: CI/CD
 # PR에서는 test Job만 실행
 on:
   push:
-    branches: ["develop"]
+    branches: ["main"]
   pull_request:
-    branches: ["develop"]
+    branches: ["main"]
 
 permissions:
   contents: read
@@ -70,7 +70,7 @@ jobs:
 
   # PR에서는 실행 X, test가 성공해야 실행
   build-push:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && vars.ENABLE_CD == 'true'
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -120,10 +120,10 @@ jobs:
           context: .
           push: true
           # 하나의 이미지에 두 태그를 붙임.
-          # 1. develop <- 항상 가장 최근 이미지
+          # 1. main <- 항상 가장 최근 이미지
           # 2. SHA <- 정확한 커밋 이미지
           tags: |
-            ${{ steps.image.outputs.name }}:develop
+            ${{ steps.image.outputs.name }}:main
             ${{ steps.image.outputs.ref }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
@@ -140,7 +140,7 @@ jobs:
     timeout-minutes: 20
 
     concurrency:
-      group: cd-develop
+      group: cd-main
       # 배포 도중 새로운 배포가 와도 기존 배포를 취소하지 않음.
       cancel-in-progress: false
 

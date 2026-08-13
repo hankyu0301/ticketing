@@ -14,7 +14,7 @@ permissions:
   packages: read
 
 concurrency:
-  group: cd-develop
+  group: cd-main
   cancel-in-progress: false
 
 env:
@@ -48,7 +48,7 @@ jobs:
       - name: Checkout deploy tooling
         uses: actions/checkout@v6
         with:
-          ref: develop
+          ref: main
 
         # 입력한 SHA로 이미지 주소
       - name: Resolve image reference

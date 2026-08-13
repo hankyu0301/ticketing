@@ -37,13 +37,13 @@
 
 수치는 로컬 Docker 부하테스트 환경의 상대 비교 결과이며 운영 환경의 처리량을 의미하지 않습니다.
 
-## Git Flow
+## 브랜치 전략
 
-- `develop`: 통합 개발 및 자동 배포 기준 브랜치
-- `feature/*`, `refactor/*`: 작업 브랜치이며 Pull Request 대상은 `develop`
-- `master`: 이전 이력을 보존하는 레거시 브랜치
+- `main`: 검증이 완료된 기본 브랜치
+- `feature/*`, `fix/*`, `refactor/*`, `docs/*`: Issue와 연결한 작업 브랜치이며 Pull Request 대상은 `main`
+- 과거 PR·Issue와 원본 이력은 별도의 `ticketing-legacy` 저장소에 보존
 
-Pull Request에서는 테스트와 배포 스크립트 검증만 수행하고, `develop` push가 성공하면 이미지 빌드와 Blue/Green 배포가 이어집니다.
+Pull Request와 `main` push에서는 테스트와 배포 스크립트 검증을 수행합니다. 이미지 빌드와 Blue/Green 배포는 저장소 변수 `ENABLE_CD=true`가 설정된 경우에만 이어집니다.
 
 ## 프로젝트 기술 스택
 
@@ -461,10 +461,10 @@ docker compose -f docker-compose.standalone.yml up -d
 
 ## CI/CD와 배포
 
-[CI/CD workflow](./.github/workflows/ci-cd.yml)는 `develop` 브랜치를 기준으로 다음 순서로 동작합니다.
+[CI/CD workflow](./.github/workflows/ci-cd.yml)는 `main` 브랜치를 기준으로 다음 순서로 동작합니다.
 
 1. Pull Request와 push에서 전체 테스트, 배포 스크립트 문법 검사, ShellCheck를 수행합니다.
-2. `develop` push이면 멀티 스테이지 Docker 이미지를 빌드해 GHCR에 `develop`, 커밋 SHA 태그로 저장합니다.
+2. `main` push이고 저장소 변수 `ENABLE_CD=true`이면 멀티 스테이지 Docker 이미지를 빌드해 GHCR에 `main`, 커밋 SHA 태그로 저장합니다.
 3. EC2에 배포 파일을 전송하고, 비활성 Blue/Green 애플리케이션을 새 이미지로 기동합니다.
 4. 애플리케이션 직접 health check 후 Nginx upstream을 전환하고 외부 health check를 수행합니다.
 5. 전환이 정상이라면 기존 애플리케이션의 요청을 drain한 뒤 중지합니다. 검사 실패 시 Nginx 설정을 이전 상태로 복원합니다.
