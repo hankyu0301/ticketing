@@ -1,4 +1,5 @@
 package com.ticketing.infrastructure.messaging.rabbitmq;
 
-public record PaymentRequestedMessage(Long paymentId, Long reservationId, Long memberId) {
+public record PaymentRequestedMessage(String eventId, String attemptId, int schemaVersion,
+                                      Long paymentId, Long reservationId, Long memberId) {
 }

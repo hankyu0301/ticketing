@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ticketing.infrastructure.persistence.payment.PaymentOutboxMapper">
+    <insert id="save" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO payment_outbox
+        (event_id, payment_id, attempt_id, event_type, schema_version, payload,
+         status, attempt_count, available_at, created_at, updated_at)
+        VALUES
+        (#{eventId}, #{paymentId}, #{attemptId}, #{eventType}, #{schemaVersion}, #{payload},
+         'READY', 0, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6))
+    </insert>
+
+    <select id="findById" resultType="com.ticketing.domain.payment.model.PaymentOutbox">
+        SELECT * FROM payment_outbox WHERE id = #{id}
+    </select>
+
+    <select id="findReadyCandidates" resultType="com.ticketing.domain.payment.model.PaymentOutbox">
+        SELECT * FROM payment_outbox
+        WHERE status = 'READY' AND available_at &lt;= CURRENT_TIMESTAMP(6)
+          AND attempt_count &lt; #{maxAttempts}
+        ORDER BY available_at, id
+        LIMIT #{limit}
+    </select>
+
+    <select id="findExpiredClaims" resultType="com.ticketing.domain.payment.model.PaymentOutbox">
+        SELECT * FROM payment_outbox
+        WHERE status = 'PROCESSING' AND locked_until &lt;= CURRENT_TIMESTAMP(6)
+        ORDER BY locked_until, id
+        LIMIT #{limit}
+    </select>
+
+    <update id="tryClaim" timeout="5">
+        UPDATE payment_outbox
+        SET status = 'PROCESSING', claim_token = #{claimToken},
+            locked_until = TIMESTAMPADD(MICROSECOND, #{leaseMicros}, CURRENT_TIMESTAMP(6)),
+            attempt_count = attempt_count + 1, updated_at = CURRENT_TIMESTAMP(6)
+        WHERE id = #{id} AND status = 'READY' AND available_at &lt;= CURRENT_TIMESTAMP(6)
+          AND attempt_count &lt; #{maxAttempts}
+    </update>
+
+    <update id="markPublished" timeout="5">
+        UPDATE payment_outbox
+        SET status = 'PUBLISHED', published_at = CURRENT_TIMESTAMP(6), last_error = NULL,
+            claim_token = NULL, locked_until = NULL, updated_at = CURRENT_TIMESTAMP(6)
+        WHERE id = #{id} AND status = 'PROCESSING' AND claim_token = #{claimToken}
+    </update>
+
+    <update id="markFailed" timeout="5">
+        UPDATE payment_outbox
+        SET status = CASE WHEN #{parked} THEN 'PARKED' ELSE 'READY' END,
+            available_at = TIMESTAMPADD(MICROSECOND, #{delayMicros}, CURRENT_TIMESTAMP(6)),
+            last_error = #{error}, claim_token = NULL, locked_until = NULL,
+            updated_at = CURRENT_TIMESTAMP(6)
+        WHERE id = #{id} AND status = 'PROCESSING' AND claim_token = #{claimToken}
+        <if test="expiredOnly">
+            AND locked_until &lt;= CURRENT_TIMESTAMP(6)
+        </if>
+    </update>
+</mapper>

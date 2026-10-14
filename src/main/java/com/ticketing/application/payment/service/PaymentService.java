@@ -1,6 +1,7 @@
 package com.ticketing.application.payment.service;
 
 import com.ticketing.api.payment.dto.PaymentResponse;
+import com.ticketing.application.payment.outbox.PaymentOutboxWriter;
 import com.ticketing.domain.payment.exception.PaymentBadRequestException;
 import com.ticketing.domain.payment.exception.PaymentNotFoundException;
 import com.ticketing.domain.payment.model.Payment;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Objects;
+import java.util.UUID;
 
 import static com.ticketing.domain.payment.exception.PaymentErrorMessage.NOT_EXIST_PAYMENT;
 import static com.ticketing.domain.payment.exception.PaymentErrorMessage.NOT_EXIST_RESERVATION;
@@ -34,6 +36,7 @@ public class PaymentService {
     private final SeatMapper seatMapper;
     private final PaymentMapper paymentMapper;
     private final ApplicationEventPublisher eventPublisher;
+    private final PaymentOutboxWriter paymentOutboxWriter;
 
     @Transactional
     public PaymentResponse requestSync(Long memberId, Long reservationId) {
@@ -51,7 +54,8 @@ public class PaymentService {
     @Transactional
     public PaymentResponse requestAsync(Long memberId, Long reservationId) {
         Payment payment = preparePayment(memberId, reservationId);
-        eventPublisher.publishEvent(new PaymentRequestedEvent(payment.getPaymentId(), reservationId, memberId));
+        paymentOutboxWriter.append(new PaymentRequestedEvent(UUID.randomUUID().toString(),
+                payment.getAttemptId(), 1, payment.getPaymentId(), reservationId, memberId));
         return new PaymentResponse(payment);
     }
 

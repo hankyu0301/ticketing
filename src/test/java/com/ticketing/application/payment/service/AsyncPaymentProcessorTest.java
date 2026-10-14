@@ -72,7 +72,7 @@ class AsyncPaymentProcessorTest {
         given(paymentMapper.findByIdForUpdate(paymentId)).willReturn(Optional.of(payment));
         given(seatMapper.findByIdForUpdate(seatId)).willReturn(Optional.of(seat));
 
-        Payment result = asyncPaymentProcessor.complete(paymentId);
+        Payment result = asyncPaymentProcessor.complete(paymentId, payment.getAttemptId());
 
         InOrder inOrder = inOrder(paymentMapper, reservationMapper, seatMapper);
         inOrder.verify(paymentMapper).findById(paymentId);

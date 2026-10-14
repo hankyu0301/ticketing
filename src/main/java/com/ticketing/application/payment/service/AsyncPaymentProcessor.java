@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 import static com.ticketing.domain.payment.exception.PaymentErrorMessage.NOT_EXIST_PAYMENT;
 
@@ -29,12 +30,13 @@ public class AsyncPaymentProcessor {
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
-    public Payment complete(Long paymentId) {
+    public Payment complete(Long paymentId, String attemptId) {
         Payment paymentSnapshot = findPayment(paymentId);
         Reservation reservation = reservationMapper.findByIdForUpdate(paymentSnapshot.getReservationId());
         Payment payment = findPaymentForUpdate(paymentId);
 
-        if (payment.getStatus() != Payment.PaymentStatus.PENDING) {
+        if (!Objects.equals(payment.getAttemptId(), attemptId)
+                || payment.getStatus() != Payment.PaymentStatus.PENDING) {
             return payment;
         }
 

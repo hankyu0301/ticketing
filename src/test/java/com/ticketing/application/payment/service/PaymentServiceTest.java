@@ -1,6 +1,7 @@
 package com.ticketing.application.payment.service;
 
 import com.ticketing.api.payment.dto.PaymentResponse;
+import com.ticketing.application.payment.outbox.PaymentOutboxWriter;
 import com.ticketing.domain.payment.model.Payment;
 import com.ticketing.domain.reservation.model.Reservation;
 import com.ticketing.domain.seat.model.Seat;
@@ -47,6 +48,9 @@ class PaymentServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private PaymentOutboxWriter paymentOutboxWriter;
+
     @Test
     @DisplayName("동기 결제 요청은 서비스에서 즉시 결제를 완료한다.")
     void requestSyncCompletesPaymentDirectly() {
@@ -86,8 +90,8 @@ class PaymentServiceTest {
     }
 
     @Test
-    @DisplayName("비동기 결제 요청은 결제를 준비한 뒤 이벤트만 발행한다.")
-    void requestAsyncPublishesEvent() {
+    @DisplayName("비동기 결제 요청은 결제를 준비한 뒤 Outbox를 저장한다.")
+    void requestAsyncStoresOutbox() {
         Long memberId = 1L;
         Long reservationId = 10L;
         Long seatId = 100L;
@@ -106,7 +110,12 @@ class PaymentServiceTest {
 
         PaymentResponse response = paymentService.requestAsync(memberId, reservationId);
 
-        verify(eventPublisher).publishEvent(new PaymentRequestedEvent(999L, reservationId, memberId));
+        ArgumentCaptor<PaymentRequestedEvent> eventCaptor = ArgumentCaptor.forClass(PaymentRequestedEvent.class);
+        verify(paymentOutboxWriter).append(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().paymentId()).isEqualTo(999L);
+        assertThat(eventCaptor.getValue().attemptId()).isNotBlank();
+        assertThat(eventCaptor.getValue().eventId()).isNotBlank();
+        assertThat(eventCaptor.getValue().schemaVersion()).isEqualTo(1);
         verify(paymentMapper, never()).update(any(Payment.class));
         verify(reservationMapper, never()).update(any(Reservation.class));
         verify(seatMapper, never()).update(any(Seat.class));

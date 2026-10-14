@@ -8,12 +8,21 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 @Configuration
 @ConditionalOnProperty(name = "ticketing.scheduler.enabled", havingValue = "true", matchIfMissing = true)
 @EnableScheduling
 @EnableSchedulerLock(defaultLockAtMostFor = "PT30S")
 public class SchedulerConfig {
+
+    @Bean
+    public ThreadPoolTaskScheduler taskScheduler() {
+        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(1);
+        scheduler.setThreadNamePrefix("ticketing-scheduler-");
+        return scheduler;
+    }
 
     @Bean
     public LockProvider lockProvider(RedisConnectionFactory connectionFactory) {

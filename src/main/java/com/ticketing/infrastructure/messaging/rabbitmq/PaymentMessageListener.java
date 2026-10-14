@@ -16,6 +16,6 @@ public class PaymentMessageListener {
             autoStartup = "${ticketing.payment.rabbitmq.listener-auto-startup:true}"
     )
     public void handlePaymentRequested(PaymentRequestedMessage message) {
-        asyncPaymentProcessor.complete(message.paymentId());
+        asyncPaymentProcessor.complete(message.paymentId(), message.attemptId());
     }
 }

@@ -180,6 +180,7 @@ WHERE n <= @reservation_count;
 
 INSERT INTO payments (
     payment_id,
+    attempt_id,
     reservation_id,
     member_id,
     amount,
@@ -189,6 +190,7 @@ INSERT INTO payments (
     updated_at
 )
 SELECT n,
+       UUID(),
        n,
        ((n - 1) % @member_count) + 1,
        CASE

@@ -1,5 +1,6 @@
 SET FOREIGN_KEY_CHECKS = 0;
 
+DROP TABLE IF EXISTS payment_outbox;
 DROP TABLE IF EXISTS payments;
 DROP TABLE IF EXISTS reservations;
 DROP TABLE IF EXISTS seats;
@@ -81,6 +82,7 @@ CREATE TABLE reservations (
 
 CREATE TABLE payments (
     payment_id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT 'payment primary key',
+    attempt_id CHAR(36) NOT NULL COMMENT 'current payment attempt',
     reservation_id BIGINT NOT NULL COMMENT 'reservation foreign key',
     member_id BIGINT NOT NULL COMMENT 'member foreign key',
     amount DECIMAL(10, 2) NOT NULL COMMENT 'payment amount',
@@ -94,3 +96,27 @@ CREATE TABLE payments (
         FOREIGN KEY (member_id) REFERENCES members(member_id),
     CONSTRAINT uk_payments_reservation UNIQUE (reservation_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='payment history';
+
+CREATE TABLE payment_outbox (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    event_id CHAR(36) NOT NULL,
+    payment_id BIGINT NOT NULL,
+    attempt_id CHAR(36) NOT NULL,
+    event_type VARCHAR(50) NOT NULL,
+    schema_version INT NOT NULL,
+    payload JSON NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'READY',
+    attempt_count INT NOT NULL DEFAULT 0,
+    available_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    claim_token CHAR(36) DEFAULT NULL,
+    locked_until DATETIME(6) DEFAULT NULL,
+    last_error VARCHAR(2000) DEFAULT NULL,
+    published_at DATETIME(6) DEFAULT NULL,
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    CONSTRAINT fk_payment_outbox_payment FOREIGN KEY (payment_id) REFERENCES payments(payment_id),
+    CONSTRAINT uk_payment_outbox_event UNIQUE (event_id),
+    CONSTRAINT uk_payment_outbox_attempt UNIQUE (payment_id, attempt_id, event_type),
+    INDEX idx_payment_outbox_ready (status, available_at, id),
+    INDEX idx_payment_outbox_expired (status, locked_until, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='payment publication outbox';

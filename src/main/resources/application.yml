@@ -14,6 +14,17 @@ spring:
     port: 5672
     username: guest
     password: guest
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    connection-timeout: 5s
+    channel-rpc-timeout: 5s
+    cache:
+      channel:
+        checkout-timeout: 5s
+    template:
+      mandatory: true
+      retry:
+        enabled: false
   session:
     store-type: redis
     redis:
@@ -70,6 +81,17 @@ ticketing:
       lock-at-least-for: PT1S
       lock-at-most-for: PT2M
   payment:
+    outbox:
+      enabled: true
+      poll-delay-ms: 500
+      worker-count: 4
+      candidate-limit: 20
+      recovery-limit: 20
+      confirm-timeout-ms: 5000
+      lease-duration-ms: 60000
+      max-attempts: 10
+      retry-initial-delay-ms: 1000
+      retry-max-delay-ms: 60000
     rabbitmq:
       exchange: ticketing.payment
       queue: ticketing.payment.requested

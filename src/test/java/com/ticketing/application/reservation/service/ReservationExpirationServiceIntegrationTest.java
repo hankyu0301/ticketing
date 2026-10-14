@@ -94,7 +94,9 @@ class ReservationExpirationServiceIntegrationTest extends IntegrationTestSupport
 
         reservationExpirationService.expirePendingReservation(reservationId);
         paymentMessageListener.handlePaymentRequested(
-                new PaymentRequestedMessage(pendingResponse.getPaymentId(), reservationId, memberId)
+                new PaymentRequestedMessage(java.util.UUID.randomUUID().toString(),
+                        paymentMapper.findById(pendingResponse.getPaymentId()).orElseThrow().getAttemptId(), 1,
+                        pendingResponse.getPaymentId(), reservationId, memberId)
         );
 
         Payment payment = paymentMapper.findById(pendingResponse.getPaymentId()).orElseThrow();

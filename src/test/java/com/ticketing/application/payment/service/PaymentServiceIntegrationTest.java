@@ -9,6 +9,8 @@ import com.ticketing.domain.seat.model.Seat;
 import com.ticketing.infrastructure.messaging.rabbitmq.PaymentMessageListener;
 import com.ticketing.infrastructure.messaging.rabbitmq.PaymentRequestedMessage;
 import com.ticketing.infrastructure.persistence.payment.PaymentMapper;
+import com.ticketing.infrastructure.persistence.payment.PaymentOutboxMapper;
+import com.ticketing.domain.payment.model.PaymentOutbox;
 import com.ticketing.infrastructure.persistence.reservation.ReservationMapper;
 import com.ticketing.infrastructure.persistence.seat.mapper.SeatMapper;
 import com.ticketing.support.DatabaseCleaner;
@@ -21,6 +23,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
@@ -32,13 +37,20 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.doThrow;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PaymentServiceIntegrationTest extends IntegrationTestSupport {
 
     @Autowired
     private PaymentService paymentService;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @MockitoSpyBean
+    private PaymentOutboxMapper outboxMapper;
 
     @Autowired
     private PaymentMessageListener paymentMessageListener;
@@ -101,16 +113,18 @@ class PaymentServiceIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("비동기 결제는 PENDING으로 저장하고 커밋 후 메시지를 발행한 뒤 listener에서 완료된다.")
-    void requestAsyncPublishesMessageAndCompletesByListener() {
+    @DisplayName("비동기 결제는 결제와 Outbox를 함께 저장하고 listener에서 완료된다.")
+    void requestAsyncStoresOutboxAndCompletesByListener() {
         Long reservationId = createReservation(memberId);
 
         PaymentResponse response = paymentService.requestAsync(memberId, reservationId);
 
-        verify(rabbitTemplate).convertAndSend(eq("ticketing.payment"), eq("payment.requested"), any(PaymentRequestedMessage.class));
+        verifyNoInteractions(rabbitTemplate);
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM payment_outbox WHERE payment_id = ? AND status = 'READY'",
+                Integer.class, response.getPaymentId())).isEqualTo(1);
         assertThat(response.getStatus()).isEqualTo("PENDING");
 
-        paymentMessageListener.handlePaymentRequested(new PaymentRequestedMessage(response.getPaymentId(), reservationId, memberId));
+        paymentMessageListener.handlePaymentRequested(requestedMessage(response.getPaymentId()));
 
         Payment payment = paymentMapper.findById(response.getPaymentId()).orElseThrow();
         Reservation reservation = reservationMapper.findById(reservationId);
@@ -128,10 +142,10 @@ class PaymentServiceIntegrationTest extends IntegrationTestSupport {
 
         PaymentResponse response = paymentService.requestAsync(memberId, reservationId);
 
-        paymentMessageListener.handlePaymentRequested(new PaymentRequestedMessage(response.getPaymentId(), reservationId, memberId));
+        paymentMessageListener.handlePaymentRequested(requestedMessage(response.getPaymentId()));
         Payment completed = paymentMapper.findById(response.getPaymentId()).orElseThrow();
 
-        paymentMessageListener.handlePaymentRequested(new PaymentRequestedMessage(response.getPaymentId(), reservationId, memberId));
+        paymentMessageListener.handlePaymentRequested(requestedMessage(response.getPaymentId()));
         Payment reloaded = paymentMapper.findById(response.getPaymentId()).orElseThrow();
 
         assertThat(reloaded.getStatus()).isEqualTo(Payment.PaymentStatus.COMPLETED);
@@ -143,7 +157,7 @@ class PaymentServiceIntegrationTest extends IntegrationTestSupport {
     void requestAsyncConcurrentDuplicateMessageKeepsCompletedPayment() throws InterruptedException {
         Long reservationId = createReservation(memberId);
         PaymentResponse response = paymentService.requestAsync(memberId, reservationId);
-        PaymentRequestedMessage message = new PaymentRequestedMessage(response.getPaymentId(), reservationId, memberId);
+        PaymentRequestedMessage message = requestedMessage(response.getPaymentId());
 
         int threadCount = 8;
         ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
@@ -197,6 +211,71 @@ class PaymentServiceIntegrationTest extends IntegrationTestSupport {
         Payment completed = paymentMapper.findById(retried.getPaymentId()).orElseThrow();
         assertThat(retried.getPaymentId()).isEqualTo(pendingResponse.getPaymentId());
         assertThat(completed.getStatus()).isEqualTo(Payment.PaymentStatus.COMPLETED);
+    }
+
+    private PaymentRequestedMessage requestedMessage(Long paymentId) {
+        Payment payment = paymentMapper.findById(paymentId).orElseThrow();
+        String eventId = jdbcTemplate.queryForObject("SELECT event_id FROM payment_outbox WHERE payment_id = ? AND attempt_id = ?",
+                String.class, paymentId, payment.getAttemptId());
+        return new PaymentRequestedMessage(eventId, payment.getAttemptId(), 1,
+                paymentId, payment.getReservationId(), payment.getMemberId());
+    }
+
+    @Test
+    @DisplayName("Outbox 저장 실패 시 신규 결제도 롤백된다")
+    void outboxFailureRollsBackNewPayment() {
+        Long reservationId = createReservation(memberId);
+        doThrow(new DataIntegrityViolationException("outbox unavailable"))
+                .when(outboxMapper).save(any(PaymentOutbox.class));
+
+        assertThatThrownBy(() -> paymentService.requestAsync(memberId, reservationId))
+                .isInstanceOf(DataIntegrityViolationException.class);
+
+        assertThat(paymentMapper.findByReservationId(reservationId)).isEmpty();
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM payment_outbox", Integer.class)).isZero();
+    }
+
+    @Test
+    @DisplayName("Outbox 저장 실패 시 실패 결제의 재사용도 롤백된다")
+    void outboxFailureRollsBackReusedPayment() {
+        Long reservationId = createReservation(memberId);
+        PaymentResponse response = paymentService.requestAsync(memberId, reservationId);
+        Payment payment = paymentMapper.findById(response.getPaymentId()).orElseThrow();
+        String previousAttempt = payment.getAttemptId();
+        payment.fail();
+        paymentMapper.update(payment);
+        doThrow(new DataIntegrityViolationException("outbox unavailable"))
+                .when(outboxMapper).save(any(PaymentOutbox.class));
+
+        assertThatThrownBy(() -> paymentService.requestAsync(memberId, reservationId))
+                .isInstanceOf(DataIntegrityViolationException.class);
+
+        Payment reloaded = paymentMapper.findById(payment.getPaymentId()).orElseThrow();
+        assertThat(reloaded.getStatus()).isEqualTo(Payment.PaymentStatus.FAILED);
+        assertThat(reloaded.getAttemptId()).isEqualTo(previousAttempt);
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM payment_outbox", Integer.class)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("이전 시도 메시지는 재요청된 결제를 변경하지 않는다")
+    void ignoresPreviousAttemptAfterRetry() {
+        Long reservationId = createReservation(memberId);
+        PaymentResponse response = paymentService.requestAsync(memberId, reservationId);
+        PaymentRequestedMessage previous = requestedMessage(response.getPaymentId());
+        Payment payment = paymentMapper.findById(response.getPaymentId()).orElseThrow();
+        payment.fail();
+        paymentMapper.update(payment);
+        paymentService.requestAsync(memberId, reservationId);
+
+        paymentMessageListener.handlePaymentRequested(previous);
+        assertThat(paymentMapper.findById(payment.getPaymentId()).orElseThrow().getStatus())
+                .isEqualTo(Payment.PaymentStatus.PENDING);
+        assertThat(reservationMapper.findById(reservationId).getStatus()).isEqualTo(Reservation.ReservationStatus.PENDING);
+        assertThat(seatMapper.findById(seatId).orElseThrow().getStatus()).isEqualTo(Seat.SeatStatus.TEMPORARY);
+
+        paymentMessageListener.handlePaymentRequested(requestedMessage(payment.getPaymentId()));
+        assertThat(paymentMapper.findById(payment.getPaymentId()).orElseThrow().getStatus())
+                .isEqualTo(Payment.PaymentStatus.COMPLETED);
     }
 
     private Long createReservation(Long memberId) {

@@ -3,6 +3,8 @@ package com.ticketing.infrastructure.messaging.rabbitmq;
 import com.ticketing.api.payment.dto.PaymentResponse;
 import com.ticketing.api.reservation.dto.ReservationCreateRequest;
 import com.ticketing.application.payment.service.PaymentService;
+import com.ticketing.application.payment.outbox.PaymentOutboxRelay;
+import org.springframework.jdbc.core.JdbcTemplate;
 import com.ticketing.application.reservation.facade.ReservationFacade;
 import com.ticketing.domain.payment.model.Payment;
 import com.ticketing.domain.reservation.model.Reservation;
@@ -59,6 +61,15 @@ class PaymentRabbitMqIntegrationTest extends IntegrationTestSupport {
     private PaymentService paymentService;
 
     @Autowired
+    private PaymentOutboxRelay relay;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private PaymentMessageProducer producer;
+
+    @Autowired
     private PaymentMapper paymentMapper;
 
     @Autowired
@@ -106,6 +117,9 @@ class PaymentRabbitMqIntegrationTest extends IntegrationTestSupport {
         PaymentResponse response = paymentService.requestAsync(memberId, reservationId);
 
         assertThat(response.getStatus()).isEqualTo("PENDING");
+        relay.runOnce();
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM payment_outbox WHERE payment_id = ?",
+                String.class, response.getPaymentId())).isEqualTo("PUBLISHED");
 
         Awaitility.await()
                 .atMost(Duration.ofSeconds(10))
@@ -132,5 +146,24 @@ class PaymentRabbitMqIntegrationTest extends IntegrationTestSupport {
         ReflectionTestUtils.setField(request, "scheduleId", scheduleId);
         ReflectionTestUtils.setField(request, "seatId", seatId);
         return reservationFacade.reserve(memberId, request).getReservationId();
+    }
+
+    @Test
+    @DisplayName("라우팅되지 않은 메시지는 ACK를 받아도 재시도 대상으로 남는다")
+    void unroutablePublicationIsRetriedRatherThanMarkedPublished() {
+        Long reservationId = createReservation(memberId);
+        PaymentResponse response = paymentService.requestAsync(memberId, reservationId);
+        ReflectionTestUtils.setField(producer, "routingKey", "payment.no-route");
+        try {
+            relay.runOnce();
+            assertThat(jdbcTemplate.queryForObject("SELECT status FROM payment_outbox WHERE payment_id = ?",
+                    String.class, response.getPaymentId())).isEqualTo("READY");
+            assertThat(jdbcTemplate.queryForObject("SELECT last_error FROM payment_outbox WHERE payment_id = ?",
+                    String.class, response.getPaymentId())).contains("returned");
+            assertThat(paymentMapper.findById(response.getPaymentId()).orElseThrow().getStatus())
+                    .isEqualTo(Payment.PaymentStatus.PENDING);
+        } finally {
+            ReflectionTestUtils.setField(producer, "routingKey", "payment.requested");
+        }
     }
 }

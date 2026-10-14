@@ -54,5 +54,7 @@ ticketing:
   lock:
     wait-time-ms: 200
   payment:
+    outbox:
+      enabled: false
     rabbitmq:
       listener-auto-startup: false

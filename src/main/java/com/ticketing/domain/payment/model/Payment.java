@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Getter
 @Builder
@@ -17,6 +18,7 @@ public class Payment extends BaseEntity {
     private Long paymentId;
     private Long reservationId;
     private Long memberId;
+    private String attemptId;
     private BigDecimal amount;
 
     private PaymentStatus status;
@@ -26,6 +28,7 @@ public class Payment extends BaseEntity {
         return Payment.builder()
                 .reservationId(reservationId)
                 .memberId(memberId)
+                .attemptId(UUID.randomUUID().toString())
                 .amount(amount)
                 .status(PaymentStatus.PENDING)
                 .paidAt(null)
@@ -43,6 +46,7 @@ public class Payment extends BaseEntity {
     }
 
     public void resetPending() {
+        this.attemptId = UUID.randomUUID().toString();
         this.status = PaymentStatus.PENDING;
         this.paidAt = null;
     }

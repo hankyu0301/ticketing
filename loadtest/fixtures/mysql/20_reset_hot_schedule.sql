@@ -1,5 +1,11 @@
 SET @hot_schedule_id = 1;
 
+DELETE o
+FROM payment_outbox o
+INNER JOIN payments p ON p.payment_id = o.payment_id
+INNER JOIN reservations r ON r.reservation_id = p.reservation_id
+WHERE r.schedule_id = @hot_schedule_id;
+
 DELETE p
 FROM payments p
 INNER JOIN reservations r

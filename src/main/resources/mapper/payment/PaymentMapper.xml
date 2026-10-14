@@ -5,26 +5,26 @@
 
     <insert id="save" useGeneratedKeys="true" keyProperty="paymentId">
         INSERT INTO payments
-        (reservation_id, member_id, amount, status, paid_at, created_at, updated_at)
+        (reservation_id, member_id, attempt_id, amount, status, paid_at, created_at, updated_at)
         VALUES
-            (#{reservationId}, #{memberId}, #{amount}, #{status}, #{paidAt}, NOW(), NOW())
+            (#{reservationId}, #{memberId}, #{attemptId}, #{amount}, #{status}, #{paidAt}, NOW(), NOW())
     </insert>
 
     <select id="findById" resultType="com.ticketing.domain.payment.model.Payment">
-        SELECT payment_id, reservation_id, member_id, amount, status, paid_at, created_at, updated_at
+        SELECT payment_id, reservation_id, member_id, attempt_id, amount, status, paid_at, created_at, updated_at
         FROM payments
         WHERE payment_id = #{paymentId}
     </select>
 
     <select id="findByIdForUpdate" resultType="com.ticketing.domain.payment.model.Payment" timeout="5">
-        SELECT payment_id, reservation_id, member_id, amount, status, paid_at, created_at, updated_at
+        SELECT payment_id, reservation_id, member_id, attempt_id, amount, status, paid_at, created_at, updated_at
         FROM payments
         WHERE payment_id = #{paymentId}
         FOR UPDATE
     </select>
 
     <select id="findByReservationId" resultType="com.ticketing.domain.payment.model.Payment">
-        SELECT payment_id, reservation_id, member_id, amount, status, paid_at, created_at, updated_at
+        SELECT payment_id, reservation_id, member_id, attempt_id, amount, status, paid_at, created_at, updated_at
         FROM payments
         WHERE reservation_id = #{reservationId}
     </select>
@@ -32,6 +32,7 @@
     <update id="update">
         UPDATE payments
         SET status = #{status},
+            attempt_id = #{attemptId},
             paid_at = #{paidAt},
             updated_at = NOW()
         WHERE payment_id = #{paymentId}
