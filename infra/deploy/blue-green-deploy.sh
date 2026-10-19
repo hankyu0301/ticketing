@@ -17,16 +17,33 @@ GREEN_PORT="$6"
 PUBLIC_URL="$7"
 DRAIN_SECONDS="$8"
 
-# 입력값 검증 진행
+# checkout과 분리된 runner 홈 아래 경로만 사용한다.
+APP_DIR="$(realpath -m -- "$APP_DIR")"
+SOURCE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+PUBLIC_PORT="${PUBLIC_PORT:-18000}"
+
 case "$APP_DIR" in
-  /home/ec2-user/*|/home/ubuntu/*) ;;
+  "$HOME"/*) ;;
   *)
     echo "Invalid APP_DIR: $APP_DIR" >&2
     exit 1
     ;;
 esac
 
-if ! printf '%s' "$PROJECT" | grep -Eq '^[a-z0-9][a-z0-9_-]*$'; then
+case "$APP_DIR/" in
+  "$SOURCE_DIR/"*)
+    echo "APP_DIR must be outside the checkout directory." >&2
+    exit 1
+    ;;
+esac
+case "$SOURCE_DIR/" in
+  "$APP_DIR/"*)
+    echo "APP_DIR must not contain the checkout directory." >&2
+    exit 1
+    ;;
+esac
+
+if ! printf '%s' "$PROJECT" | grep -Eq '^ticketing-local([_-][a-z0-9_-]+)?$'; then
   echo "Invalid compose project name: $PROJECT" >&2
   exit 1
 fi
@@ -41,7 +58,7 @@ if ! printf '%s' "$HEALTH_PATH" | grep -Eq '^/[A-Za-z0-9._~/?=&%-]*$'; then
   exit 1
 fi
 
-for port_name in BLUE_PORT GREEN_PORT; do
+for port_name in BLUE_PORT GREEN_PORT PUBLIC_PORT; do
   port="${!port_name}"
 
   if ! printf '%s' "$port" | grep -Eq '^[0-9]{1,5}$' ||
@@ -51,13 +68,14 @@ for port_name in BLUE_PORT GREEN_PORT; do
   fi
 done
 
-if [ "$BLUE_PORT" = "$GREEN_PORT" ]; then
-  echo "BLUE_PORT and GREEN_PORT must be different." >&2
+if [ "$BLUE_PORT" = "$GREEN_PORT" ] ||
+   [ "$BLUE_PORT" = "$PUBLIC_PORT" ] || [ "$GREEN_PORT" = "$PUBLIC_PORT" ]; then
+  echo "BLUE_PORT, GREEN_PORT and PUBLIC_PORT must be different." >&2
   exit 1
 fi
 
 case "$PUBLIC_URL" in
-  http://localhost/*|http://127.0.0.1/*) ;;
+  "http://127.0.0.1:$PUBLIC_PORT$HEALTH_PATH"|"http://localhost:$PUBLIC_PORT$HEALTH_PATH") ;;
   *)
     echo "Invalid public health URL: $PUBLIC_URL" >&2
     exit 1
@@ -78,8 +96,9 @@ for command in docker curl flock; do
   fi
 done
 
-# EC2 내부 배포 락 ( github actions 자동 배포 + ec2 스크립트 수동 배포의 동시 실행 방지)
-LOCK_FILE="/tmp/ticketing-bluegreen-deploy.lock"
+# 같은 배포 폴더를 사용하는 자동·수동 배포를 직렬화한다.
+mkdir -p -- "$APP_DIR"
+LOCK_FILE="$APP_DIR/.deploy.lock"
 exec 9>"$LOCK_FILE"
 
 if ! flock -n 9; then
@@ -92,9 +111,6 @@ SCHEMA_FILE="$APP_DIR/src/main/resources/schema.sql"
 NGINX_DIR="$APP_DIR/nginx"
 UPSTREAM="$NGINX_DIR/00-active-upstream.conf"
 SERVER="$NGINX_DIR/10-server.conf"
-
-# 스크립트 성공/실패와 상관없이 종료시 GHCR 로그아웃
-trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
 
 require_file() {
   local file="$1"
@@ -170,19 +186,9 @@ active_color() {
     return 1
   fi
 
-  if running blue && running green; then
-    echo "Both app-blue and app-green are running, but no upstream config exists." >&2
+  if running blue || running green; then
+    echo "An app is running, but no upstream config exists." >&2
     return 1
-  fi
-
-  if running blue; then
-    printf 'blue\n'
-    return 0
-  fi
-
-  if running green; then
-    printf 'green\n'
-    return 0
   fi
 
   printf 'none\n'
@@ -228,6 +234,7 @@ compose() {
   APP_DIR="$APP_DIR" \
   BLUE_PORT="$BLUE_PORT" \
   GREEN_PORT="$GREEN_PORT" \
+  PUBLIC_PORT="$PUBLIC_PORT" \
   APP_BLUE_IMAGE="$blue_image" \
   APP_GREEN_IMAGE="$green_image" \
     docker compose \
@@ -255,11 +262,11 @@ rollback_nginx() {
   local rollback_failed=false
 
   if [ -f "$UPSTREAM.bak" ]; then
-    cp "$UPSTREAM.bak" "$UPSTREAM"
+    cp "$UPSTREAM.bak" "$UPSTREAM" || return 1
   fi
 
   if [ -f "$SERVER.bak" ]; then
-    cp "$SERVER.bak" "$SERVER"
+    cp "$SERVER.bak" "$SERVER" || return 1
   fi
 
   if ! compose exec -T nginx nginx -t; then
@@ -270,9 +277,12 @@ rollback_nginx() {
     rollback_failed=true
   fi
 
-  cleanup_backups
+  if [ "$rollback_failed" = true ] || ! check_url "$PUBLIC_URL" restored-public; then
+    echo "Nginx rollback needs manual recovery; apps and backups are preserved." >&2
+    return 1
+  fi
 
-  [ "$rollback_failed" = false ]
+  cleanup_backups
 }
 
 cleanup_first_deploy() {
@@ -280,11 +290,21 @@ cleanup_first_deploy() {
   rm -f "$UPSTREAM" "$SERVER" "$UPSTREAM.next" "$SERVER.next"
 }
 
-require_file "$COMPOSE_FILE" "Compose file"
-require_file "$SCHEMA_FILE" "schema.sql"
-require_file "$SERVER.next" "next Nginx server config"
+# 복구 중 남은 백업은 다음 배포에서 덮어쓰지 않는다.
+if [ -f "$UPSTREAM.bak" ] || [ -f "$SERVER.bak" ]; then
+  echo "Unresolved Nginx backups exist. Recover the previous deployment first." >&2
+  exit 1
+fi
 
-cleanup_backups
+require_file "$SOURCE_DIR/docker-compose.bluegreen.yml" "source Compose file"
+require_file "$SOURCE_DIR/src/main/resources/schema.sql" "source schema.sql"
+require_file "$SOURCE_DIR/infra/nginx/10-server.conf" "source Nginx config"
+
+# checkout이 정리되어도 실행 중인 Nginx의 설정 경로는 유지된다.
+mkdir -p -- "$NGINX_DIR" "$(dirname -- "$SCHEMA_FILE")"
+cp "$SOURCE_DIR/docker-compose.bluegreen.yml" "$COMPOSE_FILE"
+cp "$SOURCE_DIR/src/main/resources/schema.sql" "$SCHEMA_FILE"
+cp "$SOURCE_DIR/infra/nginx/10-server.conf" "$SERVER.next"
 
 active="$(active_color)"
 
@@ -315,7 +335,7 @@ compose config --quiet
 # 최초 배포 ( active = none ): 필요한 서비스 이미지 pull (mariadb, redis, rabbitmq, nginx, app-blue)
 # 이미지 pull -> nginx 설정 준비 -> 인프라와 blue 앱 시작 -> public 검사
 if [ "$active" = none ]; then
-  compose pull mariadb redis rabbitmq nginx app-blue
+  compose pull --policy missing mariadb redis rabbitmq nginx app-blue
 
   mv -f "$SERVER.next" "$SERVER"
   write_upstream blue
@@ -340,7 +360,6 @@ if [ "$active" = none ]; then
     exit 1
   fi
 
-  docker image prune -f --filter "until=168h"
   compose ps
 
   echo "Initial deployment completed: blue"
@@ -348,8 +367,11 @@ if [ "$active" = none ]; then
 fi
 
 # target 이미지 pull, up
-compose pull "app-$target"
-compose up -d --no-deps "app-$target"
+compose pull --policy missing "app-$target"
+if ! compose up -d --no-deps "app-$target"; then
+  compose stop "app-$target" || true
+  exit 1
+fi
 
 if ! check_url "$(direct_url "$target")" "app-$target"; then
   compose stop "app-$target" || true
@@ -366,8 +388,9 @@ write_upstream "$target"
 if ! compose exec -T nginx nginx -t ||
    ! compose exec -T nginx nginx -s reload ||
    ! check_url "$PUBLIC_URL" public; then
-  rollback_nginx || true
-  compose stop "app-$target" || true
+  if rollback_nginx; then
+    compose stop "app-$target" || true
+  fi
   exit 1
 fi
 
@@ -378,15 +401,15 @@ if [ "$DRAIN_SECONDS" -gt 0 ]; then
 fi
 
 if ! check_url "$PUBLIC_URL" post-drain; then
-  rollback_nginx || true
-  compose stop "app-$target" || true
+  if rollback_nginx; then
+    compose stop "app-$target" || true
+  fi
   exit 1
 fi
 
 compose stop "app-$active" || true
 cleanup_backups
 
-docker image prune -f --filter "until=168h"
 compose ps
 
 echo "Blue-Green deployment completed: $active -> $target"

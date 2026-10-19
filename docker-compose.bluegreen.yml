@@ -1,4 +1,4 @@
-name: ticketing-bluegreen
+name: ticketing-local
 
 x-app-environment: &app-environment
   SPRING_PROFILES_ACTIVE: standalone
@@ -16,10 +16,9 @@ x-app-environment: &app-environment
 services:
   nginx:
     image: nginx:1.27-alpine
-    container_name: ticketing-nginx
     command: ["nginx", "-g", "daemon off;"]
     ports:
-      - "80:80"
+      - "127.0.0.1:${PUBLIC_PORT:-18000}:80"
     volumes:
       - ${APP_DIR:?APP_DIR is required}/nginx:/etc/nginx/conf.d:ro
     healthcheck:
@@ -60,18 +59,15 @@ services:
 
   mariadb:
     image: mariadb:10.6
-    container_name: ticketing-mariadb
     environment:
       MARIADB_DATABASE: ticketing
       MARIADB_ROOT_PASSWORD: root
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
-    ports:
-      - "127.0.0.1:3306:3306"
     volumes:
       - mariadb-data:/var/lib/mysql
-      - ./src/main/resources/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ${APP_DIR:?APP_DIR is required}/src/main/resources/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     healthcheck:
       test: ["CMD", "mariadb-admin", "ping", "-h", "localhost", "-proot"]
       interval: 10s
@@ -81,9 +77,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: ticketing-redis
-    ports:
-      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -93,13 +86,9 @@ services:
 
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
-    container_name: ticketing-rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
-    ports:
-      - "127.0.0.1:5672:5672"
-      - "127.0.0.1:15672:15672"
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
@@ -111,6 +100,4 @@ services:
 
 volumes:
   mariadb-data:
-    name: ticketing_mariadb-data
   rabbitmq-data:
-    name: ticketing_rabbitmq-data

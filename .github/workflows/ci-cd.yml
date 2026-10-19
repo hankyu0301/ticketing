@@ -11,15 +11,15 @@ on:
 permissions:
   contents: read
 
-# 공통 환경 변수
+# 로컬 배포 설정
 env:
-  EC2_USER: ${{ vars.EC2_USER || 'ec2-user' }}
-  APP_DIR: ${{ vars.APP_DIR || '/home/ec2-user/ticketing' }}
-  COMPOSE_PROJECT_NAME: ${{ vars.COMPOSE_PROJECT_NAME || 'ticketing' }}
+  # EC2용 변수와 구분한다. 비워 두면 runner 사용자의 홈 아래에 배포한다.
+  LOCAL_DEPLOY_DIR: ${{ vars.LOCAL_DEPLOY_DIR }}
+  COMPOSE_PROJECT_NAME: ticketing-local
   APP_HEALTH_PATH: ${{ vars.APP_HEALTH_PATH || '/actuator/health' }}
+  PUBLIC_PORT: ${{ vars.LOCAL_DEPLOY_PORT || '18000' }}
   BLUE_PORT: ${{ vars.BLUE_PORT || '18080' }}
   GREEN_PORT: ${{ vars.GREEN_PORT || '18081' }}
-  PUBLIC_HEALTH_URL: ${{ vars.PUBLIC_HEALTH_URL || 'http://localhost/actuator/health' }}
   DRAIN_SECONDS: ${{ vars.ACTIVE_APP_DRAIN_SECONDS || '10' }}
 
 jobs:
@@ -133,15 +133,15 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # 이미지 빌드와 GHCR push 성공하면 실행
+  # main 배포만 로컬 runner에서 실행한다. PR 테스트는 GitHub runner를 사용한다.
   deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.ENABLE_CD == 'true'
     needs: build-push
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, ticketing-deploy]
     timeout-minutes: 20
 
     concurrency:
-      group: cd-main
-      # 배포 도중 새로운 배포가 와도 기존 배포를 취소하지 않음.
+      group: cd-local
       cancel-in-progress: false
 
     permissions:
@@ -151,76 +151,26 @@ jobs:
     steps:
       - name: Checkout source code
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
-        # secret에 저장한 서버 키와 실제 서버 키가 일치해야 접속 가능
-        # 접속 도중 다른 서버로 위장된 경우 방어 (strictHostKeyChecking=yes)
-      - name: Configure SSH
+      - name: Deploy on local runner
         env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
-          EC2_KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
-        run: |
-          set -euo pipefail
-
-          test -n "$EC2_HOST"
-          test -n "$EC2_SSH_KEY"
-          test -n "$EC2_KNOWN_HOSTS"
-
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/ec2_key
-          printf '%s\n' "$EC2_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/ec2_key
-          chmod 644 ~/.ssh/known_hosts
-
-          ssh-keygen -F "$EC2_HOST" -f ~/.ssh/known_hosts >/dev/null
-
-      - name: Upload deploy files
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-        run: |
-          set -euo pipefail
-
-          ssh -o StrictHostKeyChecking=yes -i ~/.ssh/ec2_key \
-            "$EC2_USER@$EC2_HOST" \
-            "mkdir -p '$APP_DIR/nginx' '$APP_DIR/src/main/resources'"
-
-          scp -o StrictHostKeyChecking=yes -i ~/.ssh/ec2_key \
-            docker-compose.bluegreen.yml \
-            "$EC2_USER@$EC2_HOST:$APP_DIR/docker-compose.bluegreen.yml"
-
-          scp -o StrictHostKeyChecking=yes -i ~/.ssh/ec2_key \
-            infra/nginx/10-server.conf \
-            "$EC2_USER@$EC2_HOST:$APP_DIR/nginx/10-server.conf.next"
-
-          scp -o StrictHostKeyChecking=yes -i ~/.ssh/ec2_key \
-            src/main/resources/schema.sql \
-            "$EC2_USER@$EC2_HOST:$APP_DIR/src/main/resources/schema.sql"
-
-        # github runner -> ssh -> ec2에서 docker login -> ec2 docker가 ghcr에서 이미지 pull
-      - name: Log in to GHCR on EC2
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-
-          printf '%s' "$GHCR_TOKEN" | \
-            ssh -o StrictHostKeyChecking=yes -i ~/.ssh/ec2_key \
-              "$EC2_USER@$EC2_HOST" \
-              "docker login ghcr.io -u '${{ github.actor }}' --password-stdin"
-
-      - name: Deploy on EC2
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
           IMAGE_REF: ${{ needs.build-push.outputs.image_ref }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
         run: |
           set -euo pipefail
 
-          ssh -o StrictHostKeyChecking=yes -i ~/.ssh/ec2_key \
-            "$EC2_USER@$EC2_HOST" \
-            "bash -s -- \
-              '$APP_DIR' '$COMPOSE_PROJECT_NAME' '$IMAGE_REF' \
-              '$APP_HEALTH_PATH' '$BLUE_PORT' '$GREEN_PORT' \
-              '$PUBLIC_HEALTH_URL' '$DRAIN_SECONDS'" \
-            < infra/deploy/blue-green-deploy.sh
+          # 로그인 정보는 이번 실행의 임시 폴더에만 저장한다.
+          DOCKER_CONFIG="$(mktemp -d "$RUNNER_TEMP/ticketing-docker.XXXXXX")"
+          export DOCKER_CONFIG
+          trap 'rm -f -- "$DOCKER_CONFIG/config.json"; rmdir -- "$DOCKER_CONFIG" || true' EXIT
+          printf '%s' "$GHCR_TOKEN" |
+            docker login ghcr.io -u "$GHCR_USER" --password-stdin
+
+          bash infra/deploy/blue-green-deploy.sh \
+            "${LOCAL_DEPLOY_DIR:-$HOME/ticketing-deploy}" \
+            "$COMPOSE_PROJECT_NAME" "$IMAGE_REF" \
+            "$APP_HEALTH_PATH" "$BLUE_PORT" "$GREEN_PORT" \
+            "http://127.0.0.1:$PUBLIC_PORT$APP_HEALTH_PATH" "$DRAIN_SECONDS"
